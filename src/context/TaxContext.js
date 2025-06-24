@@ -11,8 +11,12 @@ const initialState = {
   // 폼 데이터
   formData: {
     salary: 0,                    // 총급여 (만원 단위)
-    personalDeduction: {},        // 인적공제 데이터
-    pensionInsurance: {},         // 연금보험료 데이터  
+    personalDeduction: {
+      target: 'personal'          // 공제 대상자 (기본값: 본인)
+    },                           // 인적공제 데이터
+    pensionInsurance: {
+      target: 'personal'          // 공제 대상자 (기본값: 본인)
+    },                           // 연금보험료 데이터  
     taxDeduction: {}              // 세액공제 데이터
   },
   
@@ -30,10 +34,7 @@ const initialState = {
   
   // UI 상태
   isLoading: false,
-  errors: {},
-  
-  // 실시간 채팅 메시지
-  chatMessages: []
+  errors: {}
 };
 
 // 액션 타입 정의

@@ -137,10 +137,40 @@ const ResultDisplay = ({
               <span>인적공제</span>
               <span className="font-medium text-red-600">-{formatNumber(personalDeductionResult.totalDeduction)}</span>
             </div>
+            {personalDeductionResult.target && (
+              <div className="text-xs text-gray-500 ml-4">
+                공제 대상자: {personalDeductionResult.target}
+              </div>
+            )}
+            {personalDeductionResult.deductionDetails && personalDeductionResult.deductionDetails.length > 0 && (
+              <div className="ml-4 space-y-1">
+                {personalDeductionResult.deductionDetails.map((detail, index) => (
+                  <div key={index} className="text-xs text-gray-600">
+                    • {detail.type}: {formatNumber(detail.totalAmount)} 
+                    {detail.target && ` (${detail.target})`}
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex justify-between">
               <span>연금보험료공제</span>
               <span className="font-medium text-red-600">-{formatNumber(pensionResult.totalPension)}</span>
             </div>
+            {pensionResult.target && (
+              <div className="text-xs text-gray-500 ml-4">
+                공제 대상자: {pensionResult.target}
+              </div>
+            )}
+            {pensionResult.details && pensionResult.details.length > 0 && (
+              <div className="ml-4 space-y-1">
+                {pensionResult.details.map((detail, index) => (
+                  <div key={index} className="text-xs text-gray-600">
+                    • {detail.type}: {formatNumber(detail.adjustedAmount)} 
+                    {detail.target && ` (${detail.target})`}
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="border-t pt-2 flex justify-between font-bold">
               <span>과세표준</span>
               <span>{formatNumber(taxBaseResult.taxBase)}</span>

@@ -56,6 +56,41 @@ export function calculateLaborIncomeDeduction(salary) {
  * @returns {object} - { basicDeduction: 기본공제, additionalDeduction: 추가공제, totalDeduction: 총공제 }
  */
 export function calculatePersonalDeduction(answers) {
+  // 공제 대상자별 공제율 설정
+  const getDeductionRate = (target) => {
+    switch (target) {
+      case 'personal': return 1.0; // 본인: 100%
+      case 'spouse': return 1.0;   // 배우자: 100%
+      case 'parent': return 1.0;   // 부모: 100%
+      case 'child': return 1.0;    // 자녀: 100%
+      case 'sibling': return 1.0;  // 형제자매: 100%
+      case 'elderly': return 1.0;  // 경로우대: 100%
+      case 'disabled': return 1.0; // 장애인: 100%
+      case 'single-parent': return 1.0; // 한부모: 100%
+      case 'female': return 1.0;   // 부녀자: 100%
+      default: return 1.0;         // 기본값: 100%
+    }
+  };
+
+  // 공제 대상자 라벨 반환
+  const getTargetLabel = (target) => {
+    switch (target) {
+      case 'personal': return '본인';
+      case 'spouse': return '배우자';
+      case 'parent': return '부모';
+      case 'child': return '자녀';
+      case 'sibling': return '형제자매';
+      case 'elderly': return '경로우대';
+      case 'disabled': return '장애인';
+      case 'single-parent': return '한부모';
+      case 'female': return '부녀자';
+      default: return '본인';
+    }
+  };
+
+  const deductionRate = getDeductionRate(answers.target);
+  const targetLabel = getTargetLabel(answers.target);
+
   // 기본공제 계산 (1인당 150만원)
   let basicDeductionCount = 0;
   
@@ -65,7 +100,7 @@ export function calculatePersonalDeduction(answers) {
   if (answers.siblings?.checked) basicDeductionCount += answers.siblings.count || 0;
   if (answers.children?.checked) basicDeductionCount += answers.children.count || 0;
   
-  const basicDeduction = basicDeductionCount * 1500000; // 150만원 × 인원수
+  const basicDeduction = Math.round(basicDeductionCount * 1500000 * deductionRate); // 150만원 × 인원수 × 공제율
 
   // 추가공제 계산
   let additionalDeduction = 0;
@@ -73,56 +108,69 @@ export function calculatePersonalDeduction(answers) {
   
   // 경로우대 (70세 이상, 1인당 100만원)
   if (answers.senior?.checked && answers.senior.count > 0) {
-    const seniorDeduction = answers.senior.count * 1000000;
+    const seniorDeduction = Math.round(answers.senior.count * 1000000 * deductionRate);
     additionalDeduction += seniorDeduction;
     deductionDetails.push({
       type: '경로우대',
       count: answers.senior.count,
       unitAmount: 1000000,
-      totalAmount: seniorDeduction
+      totalAmount: seniorDeduction,
+      target: targetLabel,
+      deductionRate: deductionRate
     });
   }
   
   // 장애인 (1인당 200만원)
   if (answers.disabled?.checked && answers.disabled.count > 0) {
-    const disabledDeduction = answers.disabled.count * 2000000;
+    const disabledDeduction = Math.round(answers.disabled.count * 2000000 * deductionRate);
     additionalDeduction += disabledDeduction;
     deductionDetails.push({
       type: '장애인',
       count: answers.disabled.count,
       unitAmount: 2000000,
-      totalAmount: disabledDeduction
+      totalAmount: disabledDeduction,
+      target: targetLabel,
+      deductionRate: deductionRate
     });
   }
   
   // 한부모 가정과 부녀자 공제 중복 처리
   if (answers['single-parent']?.checked && answers.female?.checked) {
     // 한부모 공제가 우선 적용 (100만원)
-    additionalDeduction += 1000000;
+    const singleParentDeduction = Math.round(1000000 * deductionRate);
+    additionalDeduction += singleParentDeduction;
     deductionDetails.push({
       type: '한부모 가정',
       count: 1,
       unitAmount: 1000000,
-      totalAmount: 1000000,
+      totalAmount: singleParentDeduction,
+      target: targetLabel,
+      deductionRate: deductionRate,
       note: '한부모 공제와 부녀자 공제 중복시 한부모 공제 우선 적용'
     });
   } else {
     if (answers['single-parent']?.checked) {
-      additionalDeduction += 1000000;
+      const singleParentDeduction = Math.round(1000000 * deductionRate);
+      additionalDeduction += singleParentDeduction;
       deductionDetails.push({
         type: '한부모 가정',
         count: 1,
         unitAmount: 1000000,
-        totalAmount: 1000000
+        totalAmount: singleParentDeduction,
+        target: targetLabel,
+        deductionRate: deductionRate
       });
     }
     if (answers.female?.checked) {
-      additionalDeduction += 500000;
+      const femaleDeduction = Math.round(500000 * deductionRate);
+      additionalDeduction += femaleDeduction;
       deductionDetails.push({
         type: '부녀자 공제',
         count: 1,
         unitAmount: 500000,
-        totalAmount: 500000
+        totalAmount: femaleDeduction,
+        target: targetLabel,
+        deductionRate: deductionRate
       });
     }
   }
@@ -132,7 +180,8 @@ export function calculatePersonalDeduction(answers) {
     additionalDeduction,
     totalDeduction: basicDeduction + additionalDeduction,
     basicDeductionCount,
-    deductionDetails
+    deductionDetails,
+    target: targetLabel
   };
 }
 
