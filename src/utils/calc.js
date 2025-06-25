@@ -613,4 +613,69 @@ export function calculateYearEndTax(allData) {
     laborIncomeTaxDeduction,
     finalTax: finalResult
   };
+}
+
+/**
+ * 전체 세금 계산 함수
+ * @param {object} formData - 폼 데이터
+ * @returns {object} - 전체 계산 결과
+ */
+export function calculateTax(formData) {
+  const {
+    salary = 0,
+    personalDeduction = {},
+    pensionInsurance = 0,
+    specialDeduction = 0,
+    otherDeduction = 0
+  } = formData;
+
+  // 1. 근로소득공제 계산
+  const laborIncomeResult = calculateLaborIncomeDeduction(salary);
+
+  // 2. 인적공제 계산
+  const personalDeductionResult = calculatePersonalDeduction(personalDeduction);
+
+  // 3. 과세표준 및 산출세액 계산
+  const taxBaseResult = calculateTaxBaseAndAmount({
+    salary: salary,
+    laborIncomeDeduction: laborIncomeResult.amount,
+    personalDeduction: personalDeductionResult.totalDeduction,
+    pensionDeduction: pensionInsurance,
+    specialDeduction: specialDeduction,
+    otherDeduction: otherDeduction
+  });
+
+  // 4. 근로소득세액공제 계산
+  const laborTaxDeduction = calculateLaborIncomeTaxDeduction(taxBaseResult.calculatedTax);
+
+  // 5. 최종 세액 계산
+  const finalResult = calculateFinalTax({
+    calculatedTax: taxBaseResult.calculatedTax,
+    taxReduction: 0,
+    taxDeductions: { laborIncome: laborTaxDeduction.deduction },
+    currentPaidTax: 0,
+    previousTax: 0
+  });
+
+  return {
+    // 입력 데이터
+    salary,
+    personalDeduction: personalDeductionResult.totalDeduction,
+    pensionInsurance,
+    specialDeduction,
+    otherDeduction,
+    
+    // 계산 결과
+    laborIncomeDeduction: laborIncomeResult.amount,
+    taxBase: taxBaseResult.taxBase,
+    calculatedTax: taxBaseResult.calculatedTax,
+    laborTaxDeduction: laborTaxDeduction.deduction,
+    finalTax: finalResult.finalTax,
+    
+    // 상세 내역
+    personalDeductionDetails: personalDeductionResult,
+    laborIncomeDetails: laborIncomeResult,
+    taxBaseDetails: taxBaseResult,
+    finalDetails: finalResult
+  };
 } 
