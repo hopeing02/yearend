@@ -50,6 +50,8 @@ const ACTION_TYPES = {
   SET_PERSONAL_DEDUCTION: 'SET_PERSONAL_DEDUCTION',
   SET_PENSION_INSURANCE: 'SET_PENSION_INSURANCE', 
   SET_TAX_DEDUCTION: 'SET_TAX_DEDUCTION',
+  SET_SPECIAL_DEDUCTION: 'SET_SPECIAL_DEDUCTION',
+  SET_OTHER_DEDUCTION: 'SET_OTHER_DEDUCTION',
   
   // 계산 결과 캐시
   SET_CALCULATION_RESULTS: 'SET_CALCULATION_RESULTS',
@@ -140,6 +142,24 @@ const taxReducer = (state, action) => {
         }
       };
       
+    case ACTION_TYPES.SET_SPECIAL_DEDUCTION:
+      return {
+        ...state,
+        formData: {
+          ...state.formData,
+          specialDeduction: action.payload
+        }
+      };
+      
+    case ACTION_TYPES.SET_OTHER_DEDUCTION:
+      return {
+        ...state,
+        formData: {
+          ...state.formData,
+          otherDeduction: action.payload
+        }
+      };
+      
     case ACTION_TYPES.SET_CALCULATION_RESULTS:
       return {
         ...state,
@@ -225,6 +245,8 @@ export const TaxProvider = ({ children }) => {
     setPersonalDeduction: (data) => dispatch({ type: ACTION_TYPES.SET_PERSONAL_DEDUCTION, payload: data }),
     setPensionInsurance: (data) => dispatch({ type: ACTION_TYPES.SET_PENSION_INSURANCE, payload: data }),
     setTaxDeduction: (data) => dispatch({ type: ACTION_TYPES.SET_TAX_DEDUCTION, payload: data }),
+    setSpecialDeduction: (amount) => dispatch({ type: ACTION_TYPES.SET_SPECIAL_DEDUCTION, payload: amount }),
+    setOtherDeduction: (amount) => dispatch({ type: ACTION_TYPES.SET_OTHER_DEDUCTION, payload: amount }),
     
     // 계산 결과 관리
     setCalculationResults: (results) => dispatch({ type: ACTION_TYPES.SET_CALCULATION_RESULTS, payload: results }),

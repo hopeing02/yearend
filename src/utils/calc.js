@@ -629,15 +629,18 @@ export function calculateTax(formData) {
     otherDeduction = 0
   } = formData;
 
+  // salary를 만원 단위에서 원 단위로 변환
+  const salaryInWon = convertToWon(salary);
+
   // 1. 근로소득공제 계산
-  const laborIncomeResult = calculateLaborIncomeDeduction(salary);
+  const laborIncomeResult = calculateLaborIncomeDeduction(salaryInWon);
 
   // 2. 인적공제 계산
   const personalDeductionResult = calculatePersonalDeduction(personalDeduction);
 
   // 3. 과세표준 및 산출세액 계산
   const taxBaseResult = calculateTaxBaseAndAmount({
-    salary: salary,
+    salary: salaryInWon,
     laborIncomeDeduction: laborIncomeResult.amount,
     personalDeduction: personalDeductionResult.totalDeduction,
     pensionDeduction: pensionInsurance,
@@ -659,7 +662,7 @@ export function calculateTax(formData) {
 
   return {
     // 입력 데이터
-    salary,
+    salary: salaryInWon,
     personalDeduction: personalDeductionResult.totalDeduction,
     pensionInsurance,
     specialDeduction,
