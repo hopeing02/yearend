@@ -12,7 +12,8 @@ const initialState = {
   formData: {
     salary: 0,                    // 총급여 (만원 단위)
     personalDeduction: {
-      target: 'personal'          // 공제 대상자 (기본값: 본인)
+      target: 'personal',         // 공제 대상자 (기본값: 본인)
+      self: { checked: true, count: 1 }  // 본인 기본값 설정
     },                           // 인적공제 데이터
     pensionInsurance: {
       target: 'personal'          // 공제 대상자 (기본값: 본인)
@@ -112,7 +113,10 @@ const taxReducer = (state, action) => {
         ...state,
         formData: {
           ...state.formData,
-          personalDeduction: action.payload
+          personalDeduction: {
+            ...state.formData.personalDeduction,
+            ...action.payload
+          }
         },
         calculationResults: {
           ...state.calculationResults,

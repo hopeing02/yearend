@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTax } from '../context/TaxContext';
 import { calculatePersonalDeduction, formatNumber } from '../utils/calc';
 
@@ -10,6 +10,32 @@ const PersonalDeductionInput = () => {
   // Context에서 상태와 액션들을 가져옴
   const { formData, setPersonalDeduction } = useTax();
   const personalDeduction = formData.personalDeduction || {};
+
+  // 로컬 상태로 입력값 관리 (더 안정적인 입력 처리를 위해)
+  const [localData, setLocalData] = useState({
+    self: { checked: true, count: 1 },
+    spouse: { checked: false, count: 0 },
+    parents: { checked: false, count: 0 },
+    children: { checked: false, count: 0 },
+    siblings: { checked: false, count: 0 },
+    senior: { checked: false, count: 0 },
+    disabled: { checked: false, count: 0 },
+    'single-parent': { checked: false, count: 0 },
+    female: { checked: false, count: 0 }
+  });
+
+  // Context 데이터가 변경되면 로컬 상태 동기화
+  useEffect(() => {
+    if (personalDeduction && Object.keys(personalDeduction).length > 0) {
+      setLocalData(prev => ({
+        ...prev,
+        ...personalDeduction
+      }));
+    }
+  }, [personalDeduction]);
+
+  // 디버깅용 로그
+  console.log('PersonalDeductionInput 렌더링:', { formData, personalDeduction, localData });
 
   // 설문지 옵션들
   const surveyOptions = [
@@ -75,18 +101,60 @@ const PersonalDeductionInput = () => {
     }
   ];
 
-  // 입력값 변경 핸들러
+  // 입력값 변경 핸들러 - 로컬 상태 사용
   const handleInputChange = (field, value, type = 'count') => {
-    setPersonalDeduction(prev => ({
-      ...prev,
-      [field]: type === 'checkbox' 
-        ? { checked: value, count: value ? 1 : 0 }
-        : { checked: value > 0, count: value }
-    }));
+    console.log('handleInputChange 호출:', { field, value, type });
+    
+    // 임시 테스트: 모든 입력을 콘솔에 출력
+    alert(`${field} 필드가 ${value}로 변경되었습니다. (타입: ${type})`);
+    
+    setLocalData(prev => {
+      const updated = { ...prev };
+      
+      if (type === 'checkbox') {
+        // 체크박스의 경우: checked와 count를 모두 업데이트
+        updated[field] = {
+          checked: value,
+          count: value ? 1 : 0
+        };
+      } else {
+        // 숫자 입력의 경우: count를 업데이트하고 checked는 count > 0으로 설정
+        const numValue = parseInt(value) || 0;
+        updated[field] = {
+          checked: numValue > 0,
+          count: numValue
+        };
+      }
+      
+      console.log('로컬 상태 업데이트:', updated);
+      
+      // Context도 함께 업데이트
+      setPersonalDeduction(updated);
+      
+      return updated;
+    });
   };
 
-  // 실시간 계산 결과
-  const calculationResult = calculatePersonalDeduction(personalDeduction);
+  // 체크박스 상태 확인 함수 - 로컬 상태 사용
+  const getCheckboxState = (option) => {
+    const fieldData = localData[option.id];
+    
+    if (option.defaultChecked) {
+      // 기본값이 true인 경우 (본인)
+      return fieldData?.checked !== false; // 명시적으로 false가 아니면 true
+    }
+    
+    return fieldData?.checked || false;
+  };
+
+  // 숫자 입력값 확인 함수 - 로컬 상태 사용
+  const getNumberValue = (option) => {
+    const fieldData = localData[option.id];
+    return fieldData?.count || 0;
+  };
+
+  // 실시간 계산 결과 - 로컬 상태 사용
+  const calculationResult = calculatePersonalDeduction(localData);
 
   return (
     <div className="container">
@@ -126,7 +194,7 @@ const PersonalDeductionInput = () => {
                     <input
                       type="checkbox"
                       id={option.id}
-                      checked={personalDeduction[option.id]?.checked || (option.defaultChecked && personalDeduction[option.id]?.checked !== false)}
+                      checked={getCheckboxState(option)}
                       onChange={(e) => handleInputChange(option.id, e.target.checked, 'checkbox')}
                       style={{
                         width: '20px',
@@ -139,7 +207,7 @@ const PersonalDeductionInput = () => {
                       type="number"
                       min="0"
                       max="10"
-                      value={personalDeduction[option.id]?.count || 0}
+                      value={getNumberValue(option)}
                       onChange={(e) => handleInputChange(option.id, parseInt(e.target.value) || 0)}
                       className="form-control"
                       style={{ width: '80px', textAlign: 'center' }}
@@ -178,8 +246,13 @@ const PersonalDeductionInput = () => {
                     minWidth: '80px'
                   }}>
                     {(() => {
-                      const count = personalDeduction[option.id]?.count || 
-                                   (option.defaultChecked && personalDeduction[option.id]?.checked !== false ? 1 : 0);
+                      let count = 0;
+                      
+                      if (option.type === 'checkbox') {
+                        count = getCheckboxState(option) ? 1 : 0;
+                      } else {
+                        count = getNumberValue(option);
+                      }
                       
                       if (count === 0) return '0원';
                       
