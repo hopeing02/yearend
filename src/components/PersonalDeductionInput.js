@@ -159,22 +159,22 @@ const PersonalDeductionInput = () => {
   return (
     <div className="container">
       {/* 헤더 */}
-      <div className="header">
+{/*       <div className="header">
         <h1>👥 인적공제 설문</h1>
         <p>부양가족 정보를 입력해주세요</p>
-      </div>
+      </div> */}
 
       {/* 메인 카드 */}
       <div className="main-card">
         {/* 설문지 제목 */}
-        <div className="form-section">
+{/*         <div className="form-section">
           <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem', color: '#2c3e50' }}>
             인적공제 대상자 설문
           </h2>
           <p style={{ color: '#7f8c8d', marginBottom: '2rem' }}>
             해당하는 항목을 모두 선택해주세요
           </p>
-        </div>
+        </div> */}
 
         {/* 설문지 항목들 */}
         <div className="form-section">

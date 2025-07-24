@@ -1,6 +1,3 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
 /* 기본 스타일 리셋 */
 * {
@@ -279,3 +276,453 @@ code {
     display: none;
   }
 }
+
+/* 그밖의 소득공제 컴포넌트 전용 스타일 */
+
+/* 기본 레이아웃 */
+.deduction-section {
+  padding: 20px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.container {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 15px;
+  padding: 30px;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+}
+
+.section-title {
+  font-size: 1.8rem;
+  font-weight: bold;
+  color: #2c3e50;
+  margin-bottom: 30px;
+  text-align: center;
+  border-bottom: 3px solid #3498db;
+  padding-bottom: 15px;
+}
+
+/* 폼 섹션 */
+.form-section {
+  margin-bottom: 30px;
+  padding: 25px;
+  background: linear-gradient(145deg, #f8f9fa, #e9ecef);
+  border-radius: 15px;
+  border-left: 5px solid #3498db;
+  transition: all 0.3s ease;
+}
+
+.form-section:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* 체크박스 그룹 */
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 15px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 10px;
+  transition: background-color 0.3s ease;
+}
+
+.checkbox-group:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: #3498db;
+  cursor: pointer;
+  transform: scale(1.2);
+}
+
+.checkbox-label {
+  font-weight: 600;
+  color: #2c3e50;
+  cursor: pointer;
+  user-select: none;
+  flex: 1;
+}
+
+/* 입력 상세 정보 */
+.input-details {
+  margin-top: 20px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 12px;
+  border: 1px solid #ddd;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 입력 그룹 */
+.input-group {
+  margin-bottom: 20px;
+}
+
+.input-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #34495e;
+  font-size: 0.95rem;
+}
+
+.amount-input {
+  width: 100%;
+  padding: 12px 15px;
+  border: 2px solid #ddd;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  background: white;
+}
+
+.amount-input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+  transform: translateY(-1px);
+}
+
+.amount-input::placeholder {
+  color: #bdc3c7;
+  font-style: italic;
+}
+
+/* 카드 입력 그리드 */
+.card-input-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+
+@media (max-width: 768px) {
+  .card-input-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 정보 박스 */
+.info-box {
+  background: linear-gradient(145deg, #e8f4fd, #d1ecf1);
+  border: 2px solid #3498db;
+  border-radius: 12px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.info-box p {
+  margin: 5px 0;
+  color: #2c3e50;
+}
+
+.info-box strong {
+  color: #2980b9;
+}
+
+.info-box small {
+  color: #7f8c8d;
+  font-style: italic;
+}
+
+/* 결과 메시지 */
+.result-message {
+  margin-top: 15px;
+  padding: 15px;
+  border-radius: 10px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.result-message.success {
+  background: linear-gradient(145deg, #d4edda, #c3e6cb);
+  border: 2px solid #28a745;
+  color: #155724;
+}
+
+.result-message.error {
+  background: linear-gradient(145deg, #f8d7da, #f5c6cb);
+  border: 2px solid #dc3545;
+  color: #721c24;
+}
+
+.result-message p {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 총 공제액 요약 */
+.total-summary {
+  margin: 30px 0;
+  padding: 25px;
+  background: linear-gradient(145deg, #e8f5e8, #d4edda);
+  border: 3px solid #28a745;
+  border-radius: 15px;
+  text-align: center;
+}
+
+.summary-content h3 {
+  font-size: 1.3rem;
+  color: #155724;
+  margin-bottom: 15px;
+  font-weight: bold;
+}
+
+.amount-display {
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 15px;
+}
+
+.amount-display .amount {
+  font-size: 2.2rem;
+  font-weight: bold;
+  color: #28a745;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.amount-display .unit {
+  font-size: 1.2rem;
+  color: #6c757d;
+  font-weight: 600;
+}
+
+.breakdown {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #c3e6cb;
+}
+
+.breakdown p {
+  margin: 5px 0;
+  color: #155724;
+  font-size: 0.95rem;
+}
+
+/* 안내사항 */
+.info-section {
+  background: linear-gradient(145deg, #fff3cd, #ffeaa7);
+  border: 2px solid #ffc107;
+  border-radius: 15px;
+  padding: 20px;
+  margin-top: 25px;
+}
+
+.info-section h4 {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #856404;
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.info-section ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #856404;
+  line-height: 1.7;
+}
+
+.info-section li {
+  margin-bottom: 8px;
+}
+
+.info-section strong {
+  color: #6c5204;
+}
+
+/* 계산 상세 내역 스타일 */
+.calculation-details {
+  margin-top: 20px;
+  padding: 20px;
+  background: linear-gradient(145deg, #f8f9fa, #e9ecef);
+  border-radius: 12px;
+  border-left: 4px solid #17a2b8;
+}
+
+.calculation-details h4 {
+  font-size: 1.1rem;
+  margin-bottom: 15px;
+  color: #495057;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.calculation-breakdown {
+  background: rgba(255, 255, 255, 0.8);
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid #dee2e6;
+}
+
+.calculation-steps {
+  line-height: 1.8;
+}
+
+.calculation-steps p {
+  margin: 8px 0;
+  color: #495057;
+  font-size: 0.95rem;
+}
+
+.calculation-steps strong {
+  color: #212529;
+  font-weight: 600;
+}
+
+.calculation-formula {
+  margin-top: 20px;
+  padding: 15px;
+  background: linear-gradient(145deg, #e3f2fd, #bbdefb);
+  border-radius: 8px;
+  border-left: 4px solid #2196f3;
+}
+
+.calculation-formula p {
+  margin: 10px 0;
+  font-size: 0.95rem;
+}
+
+.calculation-formula strong {
+  color: #1565c0;
+}
+
+.final-result {
+  margin-top: 15px;
+  padding: 12px;
+  background: linear-gradient(145deg, #e8f5e8, #d4edda);
+  border-radius: 8px;
+  border: 2px solid #28a745;
+  text-align: center;
+}
+
+.final-result p {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #155724;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .container {
+    margin: 10px;
+    padding: 20px;
+  }
+  
+  .section-title {
+    font-size: 1.5rem;
+  }
+  
+  .form-section {
+    padding: 20px;
+  }
+  
+  .amount-display .amount {
+    font-size: 1.8rem;
+  }
+  
+  .checkbox-group {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+/* 접근성 향상 */
+.amount-input:invalid {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
+}
+
+input[type="checkbox"]:focus {
+  outline: 2px solid #3498db;
+  outline-offset: 2px;
+}
+
+.checkbox-label:hover {
+  color: #2980b9;
+}
+
+/* 로딩 애니메이션 (필요시) */
+.loading {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 3px solid rgba(52, 152, 219, 0.3);
+  border-radius: 50%;
+  border-top-color: #3498db;
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 성공/실패 아이콘 */
+.success-icon {
+  color: #28a745;
+  font-weight: bold;
+}
+
+.error-icon {
+  color: #dc3545;
+  font-weight: bold;
+}
+
+/* 툴팁 스타일 */
+.tooltip {
+  position: relative;
+  cursor: help;
+}
+
+.tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  z-index: 1000;
+}
+
+.tooltip:hover::after {
+  opacity: 1;
+}
+
+

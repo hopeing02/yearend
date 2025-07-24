@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { useTax } from '../context/TaxContext';
 import { calculateTax, formatNumber, convertToWon, calculateLaborIncomeDeduction } from '../utils/calc';
 import PersonalDeductionInput from './PersonalDeductionInput';
+import PensionInsuranceInput from './PensionInsuranceInput';
+import SpecialDeductionInput from './SpecialDeductionInput';
+import OtherDeductionInput from './OtherDeductionInput';
 import ResultDisplay from './ResultDisplay';
 
 /**
@@ -69,7 +72,7 @@ const TaxCalculator = () => {
                   disabled={!formData.salary || formData.salary <= 0}
                   style={{
                     padding: '10px 20px',
-                    backgroundColor: '#3b82f6',
+                    backgroundColor: ' #3b82f6',
                     color: 'white',
                     border: 'none',
                     borderRadius: '5px',
@@ -80,70 +83,42 @@ const TaxCalculator = () => {
                   계산하기
                 </button>
               </div>
-              <small style={{ color: '#6b7280', marginTop: '5px', display: 'block' }}>
-                예: 5000 = 5,000만원 (50,000,000원)
-              </small>
+              {/* 총급여 정보 표시 */}
+              {formData.salary > 0 && (
+                <div style={{ 
+                  marginTop: '10px', 
+                  padding: '10px', 
+                  backgroundColor: ' #f0f8ff', 
+                  borderRadius: '5px',
+                  fontSize: '14px'
+                }}>
+                  <p style={{ margin: 0, color: ' #2563eb' }}>
+                    💰 총급여: {formData.salary}만원 ({formatNumber(convertToWon(formData.salary))}원)
+                  </p>
+                  {laborIncomeResult && (
+                    <p style={{ margin: '5px 0 0 0', color: '#059669' }}>
+                      📊 근로소득공제: {formatNumber(laborIncomeResult.amount)}원
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* 근로소득금액 표시 (그리드 형식) */}
-        {formData.salary > 0 && (
-          <div style={{ marginTop: '2rem', marginBottom: '1rem' }}>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#2c3e50', marginBottom: '1rem' }}>
-              근로소득금액 계산
-            </h2>
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
-              gap: '1rem',
-              backgroundColor: '#f8fafc',
-              padding: '1rem',
-              borderRadius: '8px',
-              border: '1px solid #e2e8f0'
-            }}>
-              <div style={{ 
-                backgroundColor: 'white', 
-                padding: '1rem', 
-                borderRadius: '6px',
-                border: '1px solid #e2e8f0'
-              }}>
-                <div style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '0.5rem' }}>총급여</div>
-                <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#1e293b' }}>
-                  {formatNumber(convertToWon(formData.salary))}
-                </div>
-              </div>
-              <div style={{ 
-                backgroundColor: 'white', 
-                padding: '1rem', 
-                borderRadius: '6px',
-                border: '1px solid #e2e8f0'
-              }}>
-                <div style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '0.5rem' }}>근로소득공제</div>
-                <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#dc2626' }}>
-                  -{laborIncomeResult ? formatNumber(laborIncomeResult.amount) : '0만원'}
-                </div>
-              </div>
-              <div style={{ 
-                backgroundColor: 'white', 
-                padding: '1rem', 
-                borderRadius: '6px',
-                border: '1px solid #e2e8f0',
-                gridColumn: 'span 2'
-              }}>
-                <div style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '0.5rem' }}>근로소득금액</div>
-                <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#059669' }}>
-                  {formatNumber(laborIncomeAmount)}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 소득공제 섹션 제목 */}
-        <div style={{ marginTop: '2rem', marginBottom: '1rem' }}>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#2c3e50' }}>2. 소득공제</h2>
-          <p style={{ color: '#7f8c8d', marginTop: '0.5rem' }}>각종 소득공제 항목을 입력해주세요</p>
+        {/* 소득공제 섹션 헤더 */}
+        <div style={{ 
+          textAlign: 'center', 
+          margin: '2rem 0 1.5rem 0',
+          padding: '1rem',
+          backgroundColor: ' #f8fafc',
+          borderRadius: '8px',
+          border: '1px solid #e2e8f0'
+        }}>
+          <h2 style={{ color: ' #1e293b', margin: 0, fontSize: '1.5rem', fontWeight: 'bold' }}>
+            📋 소득공제
+          </h2>
+          <p style={{ color: ' #7f8c8d', marginTop: '0.5rem' }}>각종 소득공제 항목을 입력해주세요</p>
         </div>
 
         {/* 소득공제 섹션 - 카드 그리드 형태 */}
@@ -168,20 +143,11 @@ const TaxCalculator = () => {
               className="day-header"
               onClick={() => toggleAccordion('pension')}
             >
-              <span>💰 연금보험료 공제</span>
+              <span>💳 연금보험료공제</span>
               <span className={`chevron ${activeAccordion === 'pension' ? 'rotate' : ''}`}>▼</span>
             </div>
             <div className={`day-content ${activeAccordion === 'pension' ? 'show' : ''}`}>
-              <div className="form-group">
-                <label>연금보험료 입력 (원 단위)</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  placeholder="연금보험료를 입력하세요"
-                  value={formData.pensionInsurance || ''}
-                  onChange={(e) => setPensionInsurance(parseInt(e.target.value) || 0)}
-                />
-              </div>
+              <PensionInsuranceInput />
             </div>
           </div>
 
@@ -195,20 +161,11 @@ const TaxCalculator = () => {
               <span className={`chevron ${activeAccordion === 'special' ? 'rotate' : ''}`}>▼</span>
             </div>
             <div className={`day-content ${activeAccordion === 'special' ? 'show' : ''}`}>
-              <div className="form-group">
-                <label>특별소득공제 입력 (원 단위)</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  placeholder="특별소득공제를 입력하세요"
-                  value={formData.specialDeduction || ''}
-                  onChange={(e) => setSpecialDeduction(parseInt(e.target.value) || 0)}
-                />
-              </div>
+              <SpecialDeductionInput />
             </div>
           </div>
 
-          {/* 그밖의 소득공제 아코디언 */}
+          {/* 그밖의 소득공제 아코디언 - OtherDeductionInput 컴포넌트 사용 */}
           <div className="day-card">
             <div
               className="day-header"
@@ -218,16 +175,7 @@ const TaxCalculator = () => {
               <span className={`chevron ${activeAccordion === 'other' ? 'rotate' : ''}`}>▼</span>
             </div>
             <div className={`day-content ${activeAccordion === 'other' ? 'show' : ''}`}>
-              <div className="form-group">
-                <label>기타 공제액 입력 (원 단위)</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  placeholder="기타 공제액을 입력하세요"
-                  value={formData.otherDeduction || ''}
-                  onChange={(e) => setOtherDeduction(parseInt(e.target.value) || 0)}
-                />
-              </div>
+              <OtherDeductionInput />
             </div>
           </div>
         </div>
@@ -243,4 +191,4 @@ const TaxCalculator = () => {
   );
 };
 
-export default TaxCalculator; 
+export default TaxCalculator;
