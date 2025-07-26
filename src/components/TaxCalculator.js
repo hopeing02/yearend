@@ -5,6 +5,7 @@ import PersonalDeductionInput from './PersonalDeductionInput';
 import PensionInsuranceInput from './PensionInsuranceInput';
 import SpecialDeductionInput from './SpecialDeductionInput';
 import OtherDeductionInput from './OtherDeductionInput';
+import TaxBaseCalculation from './TaxBaseCalculation'; // 새로 추가
 import ResultDisplay from './ResultDisplay';
 
 /**
@@ -55,34 +56,45 @@ const TaxCalculator = () => {
             <span>1. 총급여</span>
             <span className={`chevron ${activeAccordion === 'salary' ? 'rotate' : ''}`}>▼</span>
           </div>
-          <div className={`day-content ${activeAccordion === 'salary' ? 'show' : ''}`}>
-            <div className="form-group">
-              <label>총급여 입력 (만원 단위)</label>
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
+            <div className={`day-content ${activeAccordion === 'salary' ? 'show' : ''}`}>
+            <div className="form-section">
+              <div className="input-group">
+                <label htmlFor="salary">총급여액 (만원)</label>
                 <input
                   type="number"
-                  className="form-control"
-                  placeholder="총급여를 입력하세요 (예: 5000)"
+                  id="salary"
+                  placeholder="예: 5000"
                   value={formData.salary || ''}
-                  onChange={(e) => setSalary(parseInt(e.target.value) || 0)}
-                  style={{ flex: 1 }}
+                  onChange={(e) => setSalary(parseFloat(e.target.value) || 0)}
+                  className="form-control"
+                  style={{
+                    padding: '15px',
+                    fontSize: '1.1rem',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '8px'
+                  }}
                 />
+              </div>
+              
+              <div style={{ textAlign: 'center', marginTop: '20px' }}>
                 <button
                   onClick={handleCalculate}
                   disabled={!formData.salary || formData.salary <= 0}
                   style={{
-                    padding: '10px 20px',
-                    backgroundColor: ' #3b82f6',
+                    padding: '12px 30px',
+                    fontSize: '1rem',
+                    fontWeight: 'bold',
+                    backgroundColor: formData.salary && formData.salary > 0 ? '#3498db' : '#bdc3c7',
                     color: 'white',
                     border: 'none',
-                    borderRadius: '5px',
+                    borderRadius: '8px',
                     cursor: formData.salary && formData.salary > 0 ? 'pointer' : 'not-allowed',
                     opacity: formData.salary && formData.salary > 0 ? 1 : 0.6
                   }}
                 >
                   계산하기
                 </button>
-              </div>
+              </div>  
               {/* 총급여 정보 표시 */}
               {formData.salary > 0 && (
                 <div style={{ 
@@ -179,7 +191,39 @@ const TaxCalculator = () => {
             </div>
           </div>
         </div>
+        {/* 과세표준 및 산출세액 섹션 헤더 */}
+        <div style={{ 
+          textAlign: 'center', 
+          margin: '2rem 0 1.5rem 0',
+          padding: '1rem',
+          backgroundColor: '#fff9e6',
+          borderRadius: '8px',
+          border: '2px solid #f39c12'
+        }}>
+          <h2 style={{ color: '#e67e22', margin: 0, fontSize: '1.5rem', fontWeight: 'bold' }}>
+            🧮 과세표준 및 산출세액
+          </h2>
+          <p style={{ color: '#d68910', marginTop: '0.5rem' }}>입력된 정보를 바탕으로 세금을 계산합니다</p>
+        </div>
 
+        {/* 과세표준 및 산출세액 아코디언 */}
+        <div className="day-card">
+          <div
+            className="day-header"
+            onClick={() => toggleAccordion('taxbase')}
+            style={{ 
+              background: 'linear-gradient(145deg, #fff9e6, #fef5e7)',
+              borderLeft: '5px solid #f39c12'
+            }}
+          >
+            <span>🧮 과세표준 및 산출세액 계산</span>
+            <span className={`chevron ${activeAccordion === 'taxbase' ? 'rotate' : ''}`}>▼</span>
+          </div>
+          <div className={`day-content ${activeAccordion === 'taxbase' ? 'show' : ''}`}>
+            <TaxBaseCalculation />
+          </div>
+        </div>
+        
         {/* 계산 결과 화면 */}
         {showResult && calculationResult && (
           <div className="main-card" style={{ marginTop: '2rem' }}>
