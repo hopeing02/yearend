@@ -1,8 +1,11 @@
 import React, { createContext, useContext, useReducer } from 'react';
+<<<<<<< HEAD
 import { 
   calculateOtherDeduction, 
   validateOtherDeduction 
 } from '../utils/calc';
+=======
+>>>>>>> 49dd35abc0da264140b00e585d9ede58b104ea44
 
 // Context 생성
 const TaxContext = createContext();
@@ -33,8 +36,12 @@ const initialState = {
       'housing-savings': { 
         checked: false, 
         amount: 0,
+<<<<<<< HEAD
         inputAmount: 0,
         isHouseholdHead: false // 무주택 세대주 여부 추가
+=======
+        inputAmount: 0
+>>>>>>> 49dd35abc0da264140b00e585d9ede58b104ea44
       },
       'credit-card': { 
         checked: false, 
@@ -62,6 +69,7 @@ const initialState = {
     taxBaseResult: null,
     finalResult: null
   },
+<<<<<<< HEAD
 
   validation: {
     personalDeductionValidation: { isValid: true, errors: [], warnings: [] },
@@ -72,6 +80,8 @@ const initialState = {
 
   currentStep: 1,
   totalSteps: 6, 
+=======
+>>>>>>> 49dd35abc0da264140b00e585d9ede58b104ea44
   
   // 실시간 채팅 메시지
   chatMessages: [],
@@ -128,11 +138,14 @@ const ACTION_TYPES = {
   // 액션 타입 정의에 그밖의 소득공제 관련 액션 추가
   SET_OTHER_DEDUCTION_ITEM: 'SET_OTHER_DEDUCTION_ITEM',
   VALIDATE_OTHER_DEDUCTION: 'VALIDATE_OTHER_DEDUCTION',
+<<<<<<< HEAD
   CALCULATE_OTHER_DEDUCTION: 'CALCULATE_OTHER_DEDUCTION',
     // 새로운 액션들
   SET_HOUSING_SAVINGS_HOUSEHOLD_HEAD: 'SET_HOUSING_SAVINGS_HOUSEHOLD_HEAD',
   UPDATE_CREDIT_CARD_DETAILS: 'UPDATE_CREDIT_CARD_DETAILS',
   RESET_OTHER_DEDUCTION: 'RESET_OTHER_DEDUCTION',
+=======
+>>>>>>> 49dd35abc0da264140b00e585d9ede58b104ea44
 
   // 계산 결과 캐시
   SET_CALCULATION_RESULTS: 'SET_CALCULATION_RESULTS',
@@ -295,7 +308,11 @@ const taxReducer = (state, action) => {
         key => pensionData[key]?.checked
       );
       
+<<<<<<< HEAD
       let validationErrors = [];
+=======
+      //let validationErrors = [];
+>>>>>>> 49dd35abc0da264140b00e585d9ede58b104ea44
       
       // 중복 가입 검증
       if (checkedPensions.length > 1) {
@@ -342,9 +359,14 @@ const taxReducer = (state, action) => {
             specialDeductionResult: null
           }
         };
+<<<<<<< HEAD
         
 /*       case ACTION_TYPES.VALIDATE_OTHER_DEDUCTION:
         otherData = state.formData.otherDeduction; */
+=======
+      case ACTION_TYPES.VALIDATE_OTHER_DEDUCTION:
+        const otherData = state.formData.otherDeduction;
+>>>>>>> 49dd35abc0da264140b00e585d9ede58b104ea44
         //const validationErrors_OTHER = [];
         
 /*       case ACTION_TYPES.VALIDATE_SPECIAL_DEDUCTION:
@@ -369,10 +391,14 @@ const taxReducer = (state, action) => {
           ...state,
           formData: {
             ...state.formData,
+<<<<<<< HEAD
             otherDeduction: {
               ...state.formData.otherDeduction,
               ...action.payload
             }  
+=======
+            otherDeduction: action.payload
+>>>>>>> 49dd35abc0da264140b00e585d9ede58b104ea44
           },
           calculationResults: {
             ...state.calculationResults,
@@ -385,9 +411,15 @@ const taxReducer = (state, action) => {
           ...state,
           formData: {
             ...state.formData,
+<<<<<<< HEAD
             [action.payload.itemType]: {
               ...state.formData.otherDeduction[action.payload.itemType],
               ...action.payload.itemData
+=======
+            otherDeduction: {
+              ...state.formData.otherDeduction,
+              [action.payload.itemType]: action.payload.itemData
+>>>>>>> 49dd35abc0da264140b00e585d9ede58b104ea44
             }
           },
           calculationResults: {
@@ -395,6 +427,7 @@ const taxReducer = (state, action) => {
             otherDeductionResult: null
           }
         };
+<<<<<<< HEAD
 
       case ACTION_TYPES.SET_HOUSING_SAVINGS_HOUSEHOLD_HEAD:
         return {
@@ -473,6 +506,31 @@ const taxReducer = (state, action) => {
         }
       };
         
+=======
+      
+      case ACTION_TYPES.VALIDATE_OTHER_DEDUCTION:
+        otherData = state.formData.otherDeduction;
+        const validationErrors = [];
+        
+        // 신용카드 상세정보 검증
+        if (otherData['credit-card']?.checked) {
+          const details = otherData['credit-card'].details || {};
+          const totalCardAmount = Object.values(details).reduce((sum, val) => sum + (val || 0), 0);
+          
+          if (totalCardAmount === 0) {
+            validationErrors.push('신용카드 등을 선택하셨다면 최소 한 항목은 입력해주세요.');
+          }
+        }
+        
+        return {
+          ...state,
+          otherDeductionValidation: {
+            isValid: validationErrors.length === 0,
+            errors: validationErrors
+          }
+        };        
+        
+>>>>>>> 49dd35abc0da264140b00e585d9ede58b104ea44
       case ACTION_TYPES.SET_TAX_DEDUCTION:
         return {
           ...state,
