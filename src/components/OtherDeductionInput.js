@@ -91,12 +91,14 @@ const OtherDeductionInput = () => {
           amount: 0
         };
       } else {
-        const amount = calculateHousingSavingsDeduction(inputAmount);
-        const maxPossibleDeduction = Math.min(inputAmount, 300) * 0.4;
+        const deductionResult = calculateHousingSavingsDeduction(inputAmount, isHouseholdHead);
+        // 결과가 객체인 경우 amount 속성 사용, 숫자인 경우 그대로 사용
+        const amount = typeof deductionResult === 'object' ? deductionResult.amount : deductionResult;
+        //const maxPossibleDeduction = Math.min(inputAmount, 300) * 0.4;
         
         newStatus.housingSavings = {
           isValid: true,
-          message: `납입액 ${inputAmount.toLocaleString()}만원 → 공제액 ${amount.toLocaleString()}만원 (40% 공제, 최대 120만원)`,
+          message: `납입액 ${inputAmount.toLocaleString()}만원 → 공제액 ${amount.toLocaleString()}만원 (40% 공제, 최대 300만원)`,
           amount: amount
         };
       }
@@ -125,8 +127,10 @@ const OtherDeductionInput = () => {
         };
       } else {
         const minimumRequired = salary * 0.25;
-        const amount = calculateCreditCardDeduction(details, salary);
+        const creditCardResult = calculateCreditCardDeduction(details, salary);
         const calculationDetails = getCreditCardCalculationDetails(details, salary);
+        // 결과가 객체인 경우 amount 속성 사용, 숫자인 경우 그대로 사용
+        const amount = typeof creditCardResult === 'object' ? creditCardResult.amount : creditCardResult;        
         
         if (totalUsed <= minimumRequired) {
           newStatus.creditCard = {
@@ -211,9 +215,9 @@ const OtherDeductionInput = () => {
       }
     }));
   };
+  // 총 공제액 계산 - 안전한 숫자 변환
+  const totalDeduction = (calculationStatus.housingSavings.amount || 0) + (calculationStatus.creditCard.amount || 0);
 
-  // 총 공제액 계산
-  const totalDeduction = calculationStatus.housingSavings.amount + calculationStatus.creditCard.amount;
 
   return (
     <div className="deduction-section">

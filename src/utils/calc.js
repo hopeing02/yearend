@@ -702,9 +702,10 @@ export function calculateHousingSavingsDeduction(inputAmount, isHouseholdHead = 
   // 공제 계산
   const maxInputLimit = 300; // 300만원 한도
   const deductionRate = 0.4; // 40% 공제율
-  
-  const eligibleAmount = Math.min(inputAmount, maxInputLimit);
-  const deduction = eligibleAmount * deductionRate;
+
+  const eligibleAmount = inputAmount * deductionRate;  
+  const deduction = Math.min(eligibleAmount, maxInputLimit);
+
   
   return {
     amount: Math.round(deduction),
@@ -974,7 +975,6 @@ export function validateOtherDeduction(otherData, salary = 0) {
 }
 
 /**
-<<<<<<< HEAD
  * 카드 유형명 반환
  * @param {string} key - 카드 유형 키
  * @returns {string} - 카드 유형명
@@ -993,9 +993,6 @@ function getCardTypeName(key) {
 
 /**
  * 그밖의 소득공제 종류별 설명 반환 (개선된 버전)
-=======
- * 그밖의 소득공제 종류별 설명 반환
->>>>>>> 49dd35abc0da264140b00e585d9ede58b104ea44
  * @param {string} deductionType - 공제 종류
  * @returns {object} - 공제 정보
  */
