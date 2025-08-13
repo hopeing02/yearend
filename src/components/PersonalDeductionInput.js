@@ -34,8 +34,6 @@ const PersonalDeductionInput = () => {
     }
   }, [personalDeduction]);
 
-  // 디버깅용 로그
-  console.log('PersonalDeductionInput 렌더링:', { formData, personalDeduction, localData });
 
   // 설문지 옵션들
   const surveyOptions = [
@@ -103,10 +101,10 @@ const PersonalDeductionInput = () => {
 
   // 입력값 변경 핸들러 - 로컬 상태 사용
   const handleInputChange = (field, value, type = 'count') => {
-    console.log('handleInputChange 호출:', { field, value, type });
+   // console.log('handleInputChange 호출:', { field, value, type });
     
     // 임시 테스트: 모든 입력을 콘솔에 출력
-    alert(`${field} 필드가 ${value}로 변경되었습니다. (타입: ${type})`);
+    //alert(`${field} 필드가 ${value}로 변경되었습니다. (타입: ${type})`);
     
     setLocalData(prev => {
       const updated = { ...prev };
@@ -126,7 +124,7 @@ const PersonalDeductionInput = () => {
         };
       }
       
-      console.log('로컬 상태 업데이트:', updated);
+
       
       // Context도 함께 업데이트
       setPersonalDeduction(updated);

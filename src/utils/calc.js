@@ -1,8 +1,3 @@
-/**
- * 연말정산 계산 유틸리티 함수들
- * 기존 js/tax-calculator.js에서 계산 로직을 추출하여 순수 함수로 변환
- */
-
 // 숫자 포맷 함수 - 만원 단위로 표시
 export function formatNumber(num) {
   return Math.round(num / 10000).toLocaleString('ko-KR') + '만원';
@@ -600,80 +595,141 @@ export function getSpecialDeductionInfo(deductionType) {
 
 
 /**
- * 그밖의 소득공제 계산 함수 (만원 단위)
+ * 개선된 그밖의 소득공제 계산 유틸리티
+ * - 주택청약종합저축 무주택 세대주 조건 추가
+ * - 신용카드 공제 계산 로직 정확성 향상
+ * - 상세한 오류 검증 및 메시지 제공
+ * - 디버깅을 위한 계산 과정 추적
+ */
+
+/**
+ * 그밖의 소득공제 계산 함수 (개선된 버전)
  * @param {object} otherData - 그밖의 소득공제 데이터
  * @param {number} salary - 총급여 (만원 단위)
- * @returns {object} - { totalDeduction: 총그밖의소득공제(만원), details: 상세내역 }
+ * @returns {object} - { totalDeduction: 총그밖의소득공제(만원), details: 상세내역, errors: 오류목록 }
  */
 export function calculateOtherDeduction(otherData, salary = 0) {
   let totalDeduction = 0;
   let details = [];
+  let errors = [];
   
   // 주택청약종합저축 계산
   if (otherData['housing-savings']?.checked) {
     const inputAmount = otherData['housing-savings'].inputAmount || 0;
-    const amount = calculateHousingSavingsDeduction(inputAmount);
+    const isHouseholdHead = otherData['housing-savings'].isHouseholdHead || false;
     
-    totalDeduction += amount;
+    const housingSavingsResult = calculateHousingSavingsDeduction(inputAmount, isHouseholdHead);
+    
+    totalDeduction += housingSavingsResult.amount;
     details.push({
       type: '주택청약종합저축',
       description: '무주택 세대주 청약저축 납입액',
       inputAmount: inputAmount,
-      amount: amount,
+      amount: housingSavingsResult.amount,
       rate: '40%',
-      maxLimit: 300
+      maxLimit: 300,
+      isValid: housingSavingsResult.isValid,
+      message: housingSavingsResult.message
     });
+    
+    if (!housingSavingsResult.isValid) {
+      errors.push(housingSavingsResult.message);
+    }
   }
   
   // 신용카드 등 소득공제 계산
   if (otherData['credit-card']?.checked) {
     const cardDetails = otherData['credit-card'].details || {};
-    const amount = calculateCreditCardDeduction(cardDetails, salary);
+    const creditCardResult = calculateCreditCardDeduction(cardDetails, salary);
     
-    totalDeduction += amount;
+    totalDeduction += creditCardResult.amount;
     details.push({
       type: '신용카드 등 소득공제',
       description: '신용카드, 체크카드, 현금영수증 등 사용금액',
-      amount: amount,
+      amount: creditCardResult.amount,
       rate: '차등공제',
       cardDetails: cardDetails,
-      calculationDetails: getCreditCardCalculationDetails(cardDetails, salary)
+      calculationDetails: creditCardResult.details,
+      isValid: creditCardResult.isValid,
+      message: creditCardResult.message
     });
+    
+    if (!creditCardResult.isValid) {
+      errors.push(creditCardResult.message);
+    }
   }
   
   return {
     totalDeduction: Math.round(totalDeduction),
-    details
+    details,
+    errors,
+    isValid: errors.length === 0
   };
 }
 
 /**
- * 주택청약종합저축 공제액 계산 (만원 단위)
+ * 주택청약종합저축 공제액 계산 (개선된 버전)
  * @param {number} inputAmount - 납입액 (만원 단위)
- * @returns {number} - 공제액 (만원 단위)
+ * @param {boolean} isHouseholdHead - 무주택 세대주 여부
+ * @returns {object} - { amount: 공제액, isValid: 유효성, message: 메시지 }
  */
-export function calculateHousingSavingsDeduction(inputAmount) {
-  if (inputAmount <= 0) return 0;
+export function calculateHousingSavingsDeduction(inputAmount, isHouseholdHead = false) {
+  // 기본 검증
+  if (inputAmount <= 0) {
+    return {
+      amount: 0,
+      isValid: false,
+      message: '납입액을 입력해주세요.'
+    };
+  }
   
-  // 무주택 세대주가 청약저축에 납입한 금액
-  // 연 300만원 한도 내에서 40% 공제
-  const maxInputLimit = 300; // 300만원
-  const deductionRate = 0.4; // 40%
+  if (!isHouseholdHead) {
+    return {
+      amount: 0,
+      isValid: false,
+      message: '무주택 세대주만 공제 가능합니다.'
+    };
+  }
   
-  const eligibleAmount = Math.min(inputAmount, maxInputLimit);
-  const deduction = eligibleAmount * deductionRate;
+  if (inputAmount > 1000) {
+    return {
+      amount: 0,
+      isValid: false,
+      message: '납입액이 너무 큽니다. 금액을 확인해주세요.'
+    };
+  }
   
-  return Math.round(deduction);
+  // 공제 계산
+  const maxInputLimit = 300; // 300만원 한도
+  const deductionRate = 0.4; // 40% 공제율
+
+  const eligibleAmount = inputAmount * deductionRate;  
+  const deduction = Math.min(eligibleAmount, maxInputLimit);
+
+  
+  return {
+    amount: Math.round(deduction),
+    isValid: true,
+    message: `납입액 ${inputAmount.toLocaleString()}만원 → 공제액 ${Math.round(deduction).toLocaleString()}만원 (40% 공제율 적용)`
+  };
 }
 
 /**
- * 신용카드 등 소득공제 계산 (만원 단위)
+ * 신용카드 등 소득공제 계산 (개선된 버전)
  * @param {object} details - 신용카드 사용 상세내역 (만원 단위)
  * @param {number} salary - 총급여 (만원 단위)
- * @returns {number} - 공제액 (만원 단위)
+ * @returns {object} - { amount: 공제액, isValid: 유효성, message: 메시지, details: 계산상세 }
  */
 export function calculateCreditCardDeduction(details, salary = 0) {
-  if (salary <= 0) return 0;
+  // 기본 검증
+  if (salary <= 0) {
+    return {
+      amount: 0,
+      isValid: false,
+      message: '총급여를 먼저 입력해주세요.',
+      details: null
+    };
+  }
   
   const {
     credit = 0,      // 신용카드
@@ -684,11 +740,38 @@ export function calculateCreditCardDeduction(details, salary = 0) {
     lastYear = 0     // 2023년 카드 사용금액
   } = details;
   
+  // 사용금액 합계 계산
+  const totalCardAmount = credit + check + culture;
+  const totalWithSpecial = totalCardAmount + traditional + transport;
+  
+  if (totalWithSpecial <= 0) {
+    return {
+      amount: 0,
+      isValid: false,
+      message: '카드 사용금액을 입력해주세요.',
+      details: null
+    };
+  }
+  
   // 총급여 기준 확인 (7천만원)
   const isUnder70Million = salary <= 7000;
   
   // 최저사용금액 (총급여의 25%)
   const minimumAmount = salary * 0.25;
+  
+  // 최저사용금액 미달 검사
+  if (totalWithSpecial <= minimumAmount) {
+    return {
+      amount: 0,
+      isValid: false,
+      message: `최저사용금액 ${minimumAmount.toLocaleString()}만원 미달 (현재: ${totalWithSpecial.toLocaleString()}만원)`,
+      details: {
+        minimumRequired: minimumAmount,
+        totalUsed: totalWithSpecial,
+        shortfall: minimumAmount - totalWithSpecial
+      }
+    };
+  }
   
   // 각 항목별 공제액 계산
   const creditCardDeduction = credit * 0.15;        // 신용카드 15%
@@ -697,10 +780,7 @@ export function calculateCreditCardDeduction(details, salary = 0) {
   const transportDeduction = transport * 0.4;       // 대중교통 40%
   const cultureDeduction = isUnder70Million ? culture * 0.3 : 0; // 도서/공연 30% (7천만원 이하자만)
   
-  // 최저사용금액에 따른 기본공제액 계산
-  const totalCardAmount = credit + check + culture;
-  const totalWithSpecial = totalCardAmount + traditional + transport;
-  
+  // 최저사용금액에 따른 기본공제액 차감 계산
   let minimumDeduction = 0;
   
   if (minimumAmount <= credit) {
@@ -714,9 +794,6 @@ export function calculateCreditCardDeduction(details, salary = 0) {
     minimumDeduction = credit * 0.15 + 
                       (check + culture) * 0.3 + 
                       (minimumAmount - totalCardAmount) * 0.4;
-  } else {
-    // 최저사용금액이 전체 사용액을 초과하는 경우 (공제 불가)
-    return 0;
   }
   
   // 전년 대비 증가분 계산 (5% 초과 증가분의 10%)
@@ -724,7 +801,7 @@ export function calculateCreditCardDeduction(details, salary = 0) {
   const thisYearTotal = totalWithSpecial;
   const lastYearThreshold = lastYear * 1.05; // 전년 대비 5% 증가 기준
   
-  if (thisYearTotal > lastYearThreshold) {
+  if (thisYearTotal > lastYearThreshold && lastYear > 0) {
     const increaseAmount = thisYearTotal - lastYearThreshold;
     const lastYearFivePercent = lastYear * 0.05;
     
@@ -744,112 +821,117 @@ export function calculateCreditCardDeduction(details, salary = 0) {
   let totalDeduction = Math.min(baseDeduction, deductionLimit);
   
   // 공제한도 초과 시 특별공제 적용
+  let specialDeduction = 0;
+  let additionalDeduction2 = 0;
+  
   if (baseDeduction > deductionLimit) {
     const excessAmount = baseDeduction - deductionLimit;
     
-    // 특별공제 대상 (전통시장, 대중교통, 도서/공연)
-    const specialTargets = traditionalDeduction + transportDeduction + cultureDeduction;
-    const specialDeduction = Math.min(excessAmount, specialTargets, specialDeductionLimit);
+    // 특별공제 대상 (전통시장, 대중교통, 도서/공연) 공제액 합계
+    const specialTargetsDeduction = traditionalDeduction + transportDeduction + cultureDeduction;
     
-    // 추가공제 (특별공제로도 처리되지 않은 초과분)
-    const remainingExcess = Math.max(0, excessAmount - specialTargets);
-    const additionalDeduction2 = Math.min(remainingExcess, additionalDeduction1, 100);
+    // 9번: 공제한도 초과금액과 특별공제대상 합계액 중 작은 금액 (특별공제한도 적용)
+    specialDeduction = Math.min(excessAmount, specialTargetsDeduction, specialDeductionLimit);
+    
+    // 10번: 공제한도 초과금액에서 특별공제대상 합계액을 차감한 금액과 전년대비 증가분 중 작은 금액
+    const remainingExcess = Math.max(0, excessAmount - specialTargetsDeduction);
+    additionalDeduction2 = Math.min(remainingExcess, additionalDeduction1, 100);
     
     totalDeduction = deductionLimit + specialDeduction + additionalDeduction2;
   }
   
-  return Math.round(Math.max(0, totalDeduction));
+  const finalAmount = Math.round(Math.max(0, totalDeduction));
+  
+  // 계산 상세 정보
+  const calculationDetails = {
+    salary: salary,
+    minimumRequired: minimumAmount,
+    isUnder70Million: isUnder70Million,
+    
+    // 각 항목별 사용액 및 공제액
+    cardAmounts: {
+      credit: { used: credit, deduction: creditCardDeduction },
+      check: { used: check, deduction: checkCardDeduction },
+      traditional: { used: traditional, deduction: traditionalDeduction },
+      transport: { used: transport, deduction: transportDeduction },
+      culture: { used: culture, deduction: cultureDeduction }
+    },
+    
+    // 사용금액 합계
+    totalCardAmount: totalCardAmount,
+    totalWithSpecial: totalWithSpecial,
+    
+    // 공제 계산 과정
+    minimumDeduction: minimumDeduction,
+    baseDeduction: baseDeduction,
+    additionalDeduction1: additionalDeduction1,
+    specialDeduction: specialDeduction,
+    additionalDeduction2: additionalDeduction2,
+    
+    // 특별공제 관련 상세 정보
+    specialTargetsDeduction: traditionalDeduction + transportDeduction + cultureDeduction,
+    excessAmount: Math.max(0, baseDeduction - deductionLimit),
+    remainingExcess: Math.max(0, Math.max(0, baseDeduction - deductionLimit) - (traditionalDeduction + transportDeduction + cultureDeduction)),
+    
+    // 한도 및 최종 공제액
+    deductionLimit: deductionLimit,
+    specialDeductionLimit: specialDeductionLimit,
+    finalAmount: finalAmount,
+    
+    // 전년 대비 증가분 정보
+    lastYearInfo: {
+      lastYear: lastYear,
+      thisYear: thisYearTotal,
+      threshold: lastYearThreshold,
+      increase: Math.max(0, thisYearTotal - lastYearThreshold),
+      additionalDeduction: additionalDeduction1 // 이 값이 중요합니다!
+    }
+  };
+  
+  return {
+    amount: finalAmount,
+    isValid: true,
+    message: `총 사용액 ${totalWithSpecial.toLocaleString()}만원 → 공제액 ${finalAmount.toLocaleString()}만원`,
+    details: calculationDetails
+  };
 }
 
 /**
- * 신용카드 등 공제 계산 상세내역 반환
+ * 신용카드 등 공제 계산 상세내역 반환 (개선된 버전)
  * @param {object} details - 신용카드 사용 상세내역
  * @param {number} salary - 총급여 (만원 단위)
  * @returns {object} - 상세 계산 내역
  */
 export function getCreditCardCalculationDetails(details, salary = 0) {
-  if (salary <= 0) return null;
-  
-  const {
-    credit = 0,
-    check = 0,
-    traditional = 0,
-    transport = 0,
-    culture = 0,
-    lastYear = 0
-  } = details;
-  
-  const isUnder70Million = salary <= 7000;
-  const minimumAmount = salary * 0.25;
-  
-  // 각 항목별 계산
-  const calculations = {
-    salaryThreshold: minimumAmount,
-    isUnder70Million: isUnder70Million,
-    
-    // 각 항목별 공제액
-    creditCardAmount: credit * 0.15,
-    checkCardAmount: check * 0.3,
-    traditionalAmount: traditional * 0.4,
-    transportAmount: transport * 0.4,
-    cultureAmount: isUnder70Million ? culture * 0.3 : 0,
-    
-    // 사용금액 합계
-    totalCardAmount: credit + check + culture,
-    totalWithSpecial: credit + check + culture + traditional + transport,
-    
-    // 최저사용금액 공제
-    minimumDeduction: 0,
-    
-    // 전년 대비 증가분
-    thisYearTotal: credit + check + culture + traditional + transport,
-    lastYearThreshold: lastYear * 1.05,
-    increaseAmount: Math.max(0, (credit + check + culture + traditional + transport) - (lastYear * 1.05)),
-    additionalDeduction: 0,
-    
-    // 공제한도
-    deductionLimit: isUnder70Million ? 300 : 250,
-    specialDeductionLimit: isUnder70Million ? 300 : 200
-  };
-  
-  // 최저사용금액 공제 계산
-  const totalCardAmount = calculations.totalCardAmount;
-  const totalWithSpecial = calculations.totalWithSpecial;
-  
-  if (minimumAmount <= credit) {
-    calculations.minimumDeduction = minimumAmount * 0.15;
-  } else if (credit < minimumAmount && minimumAmount <= totalCardAmount) {
-    calculations.minimumDeduction = credit * 0.15 + (minimumAmount - credit) * 0.3;
-  } else if (totalCardAmount < minimumAmount && minimumAmount <= totalWithSpecial) {
-    calculations.minimumDeduction = credit * 0.15 + 
-                                   (check + culture) * 0.3 + 
-                                   (minimumAmount - totalCardAmount) * 0.4;
-  }
-  
-  // 전년 대비 증가분 추가공제 계산
-  if (calculations.increaseAmount > lastYear * 0.05) {
-    calculations.additionalDeduction = Math.min(calculations.increaseAmount * 0.1, 100);
-  }
-  
-  return calculations;
+  const result = calculateCreditCardDeduction(details, salary);
+  return result.details;
 }
 
 /**
- * 그밖의 소득공제 유효성 검사
+ * 그밖의 소득공제 유효성 검사 (개선된 버전)
  * @param {object} otherData - 그밖의 소득공제 데이터
- * @returns {object} - { isValid: boolean, errors: array }
+ * @param {number} salary - 총급여 (만원 단위)
+ * @returns {object} - { isValid: boolean, errors: array, warnings: array }
  */
-export function validateOtherDeduction(otherData) {
+export function validateOtherDeduction(otherData, salary = 0) {
   const errors = [];
+  const warnings = [];
   
   // 주택청약종합저축 검증
   if (otherData['housing-savings']?.checked) {
     const inputAmount = otherData['housing-savings'].inputAmount || 0;
-    if (inputAmount <= 0) {
-      errors.push('주택청약종합저축 납입액을 입력해주세요.');
+    const isHouseholdHead = otherData['housing-savings'].isHouseholdHead || false;
+    
+    if (!isHouseholdHead) {
+      errors.push('주택청약종합저축: 무주택 세대주만 공제 가능합니다.');
     }
-    if (inputAmount > 1000) {
-      errors.push('주택청약종합저축 납입액이 너무 큽니다. 금액을 확인해주세요.');
+    
+    if (inputAmount <= 0) {
+      errors.push('주택청약종합저축: 납입액을 입력해주세요.');
+    } else if (inputAmount > 1000) {
+      errors.push('주택청약종합저축: 납입액이 너무 큽니다. 금액을 확인해주세요.');
+    } else if (inputAmount > 300) {
+      warnings.push('주택청약종합저축: 300만원 초과 납입액은 공제 대상이 아닙니다.');
     }
   }
   
@@ -859,28 +941,58 @@ export function validateOtherDeduction(otherData) {
     const totalCardAmount = Object.values(details).reduce((sum, val) => sum + (val || 0), 0) - (details.lastYear || 0);
     
     if (totalCardAmount <= 0) {
-      errors.push('신용카드 등을 선택하셨다면 최소 한 항목의 사용금액을 입력해주세요.');
+      errors.push('신용카드 등: 최소 한 항목의 사용금액을 입력해주세요.');
+    }
+    
+    if (salary > 0) {
+      const minimumRequired = salary * 0.25;
+      if (totalCardAmount <= minimumRequired) {
+        warnings.push(`신용카드 등: 최저사용금액 ${minimumRequired.toLocaleString()}만원 미달로 공제 불가능합니다.`);
+      }
     }
     
     // 각 항목별 금액 검증
     Object.entries(details).forEach(([key, value]) => {
       if (value < 0) {
-        errors.push(`${key} 사용금액은 0원 이상이어야 합니다.`);
+        errors.push(`신용카드 등: ${getCardTypeName(key)} 사용금액은 0원 이상이어야 합니다.`);
       }
       if (value > 50000) {
-        errors.push(`${key} 사용금액이 너무 큽니다. 금액을 확인해주세요.`);
+        warnings.push(`신용카드 등: ${getCardTypeName(key)} 사용금액이 매우 큽니다. 금액을 확인해주세요.`);
       }
     });
+    
+    // 7천만원 초과자 문화비 사용 경고
+    if (salary > 7000 && details.culture > 0) {
+      warnings.push('신용카드 등: 총급여 7천만원 초과자는 도서/공연비 공제 불가능합니다.');
+    }
   }
   
   return {
     isValid: errors.length === 0,
-    errors
+    errors,
+    warnings
   };
 }
 
 /**
- * 그밖의 소득공제 종류별 설명 반환
+ * 카드 유형명 반환
+ * @param {string} key - 카드 유형 키
+ * @returns {string} - 카드 유형명
+ */
+function getCardTypeName(key) {
+  const nameMap = {
+    credit: '신용카드',
+    check: '체크카드/현금영수증',
+    traditional: '전통시장',
+    transport: '대중교통',
+    culture: '도서/공연/박물관/미술관',
+    lastYear: '2023년 카드 사용액'
+  };
+  return nameMap[key] || key;
+}
+
+/**
+ * 그밖의 소득공제 종류별 설명 반환 (개선된 버전)
  * @param {string} deductionType - 공제 종류
  * @returns {object} - 공제 정보
  */
@@ -891,14 +1003,16 @@ export function getOtherDeductionInfo(deductionType) {
       description: '무주택 세대주의 청약저축 납입액',
       rate: '40%',
       maxAmount: 300, // 300만원
-      note: '연 300만원 한도 내에서 40% 공제 (무주택 세대주만)'
+      note: '연 300만원 한도 내에서 40% 공제 (무주택 세대주만)',
+      conditions: ['무주택 세대주', '청약저축 납입 실적']
     },
     'credit-card': {
       name: '신용카드 등 소득공제',
       description: '신용카드, 체크카드, 현금영수증 등 사용금액',
       rate: '차등공제',
       maxAmount: 300, // 최대 300만원 (7천만원 이하자)
-      note: '총급여의 25%를 초과하는 금액에 대해 차등 공제율 적용'
+      note: '총급여의 25%를 초과하는 금액에 대해 차등 공제율 적용',
+      conditions: ['총급여의 25% 초과 사용', '각 카드별 차등 공제율 적용']
     }
   };
   
@@ -906,23 +1020,36 @@ export function getOtherDeductionInfo(deductionType) {
 }
 
 /**
- * 신용카드 등 공제 요약 정보 반환
+ * 신용카드 등 공제 요약 정보 반환 (개선된 버전)
  * @param {object} details - 신용카드 사용 상세내역
  * @param {number} salary - 총급여 (만원 단위)
  * @returns {string} - 요약 정보 텍스트
  */
 export function getCreditCardDeductionSummary(details, salary) {
-  const calculations = getCreditCardCalculationDetails(details, salary);
-  if (!calculations) return '';
+  const result = calculateCreditCardDeduction(details, salary);
   
-  const baseAmount = calculations.creditCardAmount + calculations.checkCardAmount + 
-                    calculations.cultureAmount + calculations.traditionalAmount + 
-                    calculations.transportAmount - calculations.minimumDeduction;
+  if (!result.isValid) {
+    return result.message;
+  }
   
-  const finalAmount = calculateCreditCardDeduction(details, salary);
+  const calculationDetails = result.details;
+  if (!calculationDetails) return '';
   
-  return `기본공제: ${Math.round(baseAmount).toLocaleString()}만원, 최종공제: ${finalAmount.toLocaleString()}만원`;
+  const totalUsed = calculationDetails.totalWithSpecial;
+  const finalAmount = result.amount;
+  
+  return `총 사용액 ${totalUsed.toLocaleString()}만원 → 최종공제액 ${finalAmount.toLocaleString()}만원`;
 }
+
+/**
+ * 숫자 포맷팅 함수
+ * @param {number} number - 숫자
+ * @returns {string} - 포맷된 문자열
+ */
+/* export function formatNumber(number) {
+  if (typeof number !== 'number') return '0';
+  return number.toLocaleString();
+} */
 
 
 
