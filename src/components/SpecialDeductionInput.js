@@ -128,10 +128,16 @@ const SpecialDeductionInput = React.memo(() => {
     return fieldData?.checked || false;
   }, [localData]);
 
-  // ✅ 숫자 입력값 확인 함수 최적화
-  const getAmountValue = useCallback((optionId) => {
+  // ✅ 입력값 확인 함수 (사용자가 입력한 원래 값)
+  const getInputValue = useCallback((optionId) => {
     const fieldData = localData[optionId];
-    return fieldData?.amount || 0;
+    return fieldData?.inputAmount || 0;  // ✅ inputAmount 사용 (사용자 입력값)
+  }, [localData]);
+
+  // ✅ 계산된 공제액 확인 함수 (결과 표시용)
+  const getCalculatedAmount = useCallback((optionId) => {
+    const fieldData = localData[optionId];
+    return fieldData?.amount || 0;  // ✅ amount 사용 (계산된 공제액)
   }, [localData]);
 
   // ✅ 상세정보 확인 함수 최적화
@@ -227,7 +233,8 @@ const SpecialDeductionInput = React.memo(() => {
           updated[field] = {
             ...updated[field],
             checked: value,
-            amount: value ? autoAmount : 0
+            amount: value ? autoAmount : 0,
+            inputAmount: value ? autoAmount : 0  // ✅ 자동계산된 경우에도 inputAmount 설정
           };
         }
       } else if (type === 'amount') {
@@ -372,7 +379,7 @@ const SpecialDeductionInput = React.memo(() => {
                       type="number"
                       min="0"
                       placeholder="0"
-                      value={getAmountValue( option.id) || ''}
+                      value={getInputValue( option.id) || ''}  // ✅ 사용자 입력값 표시
                       onChange={(e) => handleInputChange( option.id, e.target.value, 'amount')}
                       style={{
                         width: '200px',
@@ -511,7 +518,7 @@ const SpecialDeductionInput = React.memo(() => {
                 <strong>사회보험료:</strong>
               </p>
               <p style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
-                {(localData.insurance?.amount || 0).toLocaleString()}만원
+                {(getCalculatedAmount('insurance')).toLocaleString()}만원  {/* ✅ 계산된 공제액 표시 */}
               </p>
             </div>
             <div style={{ textAlign: 'center' }}>
@@ -519,7 +526,7 @@ const SpecialDeductionInput = React.memo(() => {
                 <strong>주택관련:</strong>
               </p>
               <p style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
-                {((localData['housing-rent']?.amount || 0) + (localData['housing-loan']?.amount || 0)).toLocaleString()}만원
+                {(getCalculatedAmount('housing-rent') + getCalculatedAmount('housing-loan')).toLocaleString()}만원  {/* ✅ 계산된 공제액 표시 */}
               </p>
             </div>
             <div style={{ textAlign: 'center' }}>
