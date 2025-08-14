@@ -9,8 +9,8 @@ import {
 } from '../utils/calc';
 
 /**
- * 특별소득공제 입력 컴포넌트 (최적화된 버전)
- * 콘솔 스팸 제거 및 성능 최적화
+ * 특별소득공제 입력 컴포넌트 (무한렌더링 해결된 버전)
+ * useEffect에서 Context 업데이트 제거, 핸들러에서 디바운싱된 업데이트만 사용
  */
 const SpecialDeductionInput = React.memo(() => {
   const { formData, setSpecialDeduction } = useTax();
@@ -21,7 +21,7 @@ const SpecialDeductionInput = React.memo(() => {
     [formData.specialDeduction]
   );
   
-  const salary = formData.salary; // 만원 단위
+  const salary = formData.salary;
 
   // 로컬 상태로 입력값 관리
   const [localData, setLocalData] = useState({
@@ -40,7 +40,7 @@ const SpecialDeductionInput = React.memo(() => {
     }
   });
 
-  // ✅ Context 데이터 초기화 (순환 참조 방지)
+  // ✅ Context 데이터 초기화만 (순환 참조 방지)
   useEffect(() => {
     if (initialSpecialDeduction && Object.keys(initialSpecialDeduction).length > 0) {
       const isChanged = JSON.stringify(localData) !== JSON.stringify(initialSpecialDeduction);
@@ -52,6 +52,30 @@ const SpecialDeductionInput = React.memo(() => {
       }
     }
   }, [initialSpecialDeduction]); // localData 제거로 순환 참조 방지
+
+  // ❌ 제거: useEffect에서 Context 업데이트하던 부분 - 무한렌더링 원인!
+
+  // ✅ 디바운스 유틸리티 함수
+  const debounce = useCallback((func, wait) => {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }, []);
+
+  // ✅ 디바운싱된 Context 업데이트 함수
+  const debouncedUpdateContext = useMemo(
+    () => debounce((data) => {
+      console.log('SpecialDeduction Context 업데이트:', data);
+      setSpecialDeduction(data);
+    }, 300),
+    [setSpecialDeduction, debounce]
+  );
 
   // ✅ 계산 함수들 메모이제이션
   const calculateInsurance = useCallback(() => {
@@ -110,18 +134,9 @@ const SpecialDeductionInput = React.memo(() => {
     return fieldData?.amount || 0;
   }, [localData]);
 
-  // ✅ 상세정보 확인 함수 최적화 (콘솔 로그 제거)
+  // ✅ 상세정보 확인 함수 최적화
   const getDetailsValue = useCallback((field) => {
     const value = localData['housing-loan']?.details?.[field] || '';
-    
-    // ❌ 제거: 매 호출마다 콘솔 출력하던 코드
-    // console.log('getDetailsValue:', { field, value, details: localData['housing-loan']?.details });
-    
-    // ✅ 개발 환경에서만 필요시 출력
-    if (process.env.NODE_ENV === 'development' && value !== '') {
-      console.log(`getDetailsValue - ${field}:`, value);
-    }
-    
     return value;
   }, [localData]);
 
@@ -147,7 +162,7 @@ const SpecialDeductionInput = React.memo(() => {
     }
   }, [getDetailsValue]);
 
-  // ✅ 상세정보 업데이트 핸들러 최적화
+  // ✅ 상세정보 업데이트 핸들러 (무한렌더링 해결)
   const handleDetailsChange = useCallback((detailKey, value) => {
     console.log('handleDetailsChange 호출:', { detailKey, value });
     
@@ -175,13 +190,14 @@ const SpecialDeductionInput = React.memo(() => {
         }
       }
       
+      // ✅ 디바운싱된 Context 업데이트 (무한렌더링 방지)
+      debouncedUpdateContext(updated);
+      
       return updated;
     });
+  }, [calculateHousingLoan, debouncedUpdateContext]);
 
-    // ✅ 디바운싱된 Context 업데이트 (별도 useEffect에서 처리)
-  }, [calculateHousingLoan]);
-
-  // ✅ 입력값 변경 핸들러 최적화
+  // ✅ 입력값 변경 핸들러 (무한렌더링 해결)
   const handleInputChange = useCallback((field, value, type = 'checkbox') => {
     console.log('handleInputChange 호출:', { field, value, type });
     
@@ -233,39 +249,15 @@ const SpecialDeductionInput = React.memo(() => {
         };
       }
       
+      console.log('로컬 상태 업데이트:', updated);
+      
+      // ✅ 디바운싱된 Context 업데이트 (무한렌더링 방지)
+      // ❌ 제거: setSpecialDeduction(updated); - 무한렌더링 원인!
+      debouncedUpdateContext(updated);
+      
       return updated;
     });
-  }, [calculateInsurance, calculateHousingRent, calculateHousingLoan]);
-
-  // ✅ 디바운싱된 Context 업데이트
-  useEffect(() => {
-    const hasValidData = Object.values(localData).some(item => 
-      item.checked && (item.amount > 0 || item.inputAmount > 0)
-    );
-    
-    if (hasValidData) {
-      const timeoutId = setTimeout(() => {
-        console.log('SpecialDeduction Context 업데이트:', localData);
-        setSpecialDeduction(localData);
-      }, 500); // 500ms 디바운싱
-
-      return () => clearTimeout(timeoutId);
-    }
-  }, [
-    // ✅ 필요한 primitive 값들만 의존성으로 설정
-    localData.insurance?.checked,
-    localData.insurance?.amount,
-    localData['housing-rent']?.checked,
-    localData['housing-rent']?.amount,
-    localData['housing-loan']?.checked,
-    localData['housing-loan']?.amount,
-    localData['housing-loan']?.inputAmount,
-    localData['housing-loan']?.details?.contractDate,
-    localData['housing-loan']?.details?.repaymentPeriod,
-    localData['housing-loan']?.details?.interestType,
-    localData['housing-loan']?.details?.repaymentType,
-    setSpecialDeduction
-  ]);
+  }, [calculateInsurance, calculateHousingRent, calculateHousingLoan, debouncedUpdateContext]);
 
   // ✅ 실시간 계산 결과 메모이제이션
   const calculationResult = useMemo(() => {
