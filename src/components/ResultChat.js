@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { useTax } from '../context/TaxContext';
 import { 
   calculateLaborIncomeDeduction, 
@@ -7,12 +7,13 @@ import {
   calculateTaxBaseAndAmount,
   calculateLaborIncomeTaxDeduction,
   calculateFinalTax,
+  applyHousingDeductionLimits, // 새로 추가된 함수
   formatNumber 
 } from '../utils/calc';
 
 /**
  * 실시간 채팅형 연말정산 결과 표시 컴포넌트
- * 입력값이 변경될 때마다 실시간으로 계산 과정을 채팅에 추가합니다
+ * useEffect 무한렌더링 방지 및 주택 관련 2단계 종합한도 반영
  */
 const ResultChat = () => {
   const { 
@@ -30,19 +31,19 @@ const ResultChat = () => {
   const salaryTimerRef = useRef(null);
   const personalTimerRef = useRef(null);
   const pensionTimerRef = useRef(null);
+  const specialTimerRef = useRef(null); // 특별소득공제용 타이머 추가
+  const otherTimerRef = useRef(null); // 그밖의 소득공제용 타이머 추가
   const taxDeductionTimerRef = useRef(null);
 
-  // 초기 환영 메시지 제거 (중복 문제로 인해 삭제)
-
-  // 급여 입력시 디바운싱된 실시간 계산
-  useEffect(() => {
+  // 급여 입력시 디바운싱된 실시간 계산 (useCallback으로 최적화)
+  const handleSalaryChange = useCallback(() => {
     if (formData.salary > 0) {
       // 기존 타이머 클리어
       if (salaryTimerRef.current) {
         clearTimeout(salaryTimerRef.current);
       }
       
-      // 300ms 후에 메시지 교체 (디바운싱 - 더 빠른 반응)
+      // 500ms 후에 메시지 교체 (디바운싱)
       salaryTimerRef.current = setTimeout(() => {
         const salaryInWon = formData.salary * 10000;
         const laborIncomeResult = calculateLaborIncomeDeduction(salaryInWon);
@@ -57,19 +58,23 @@ const ResultChat = () => {
         
         // 기존 급여 메시지를 새 메시지로 교체
         replaceChatMessage('salary-', newMessage);
-      }, 300);
+      }, 500);
     }
+  }, [formData.salary, replaceChatMessage]);
+
+  useEffect(() => {
+    handleSalaryChange();
     
-    // 컴포넌트 언마운트시 타이머 정리
+    // 정리 함수
     return () => {
       if (salaryTimerRef.current) {
         clearTimeout(salaryTimerRef.current);
       }
     };
-  }, [formData.salary]);
+  }, [handleSalaryChange]);
 
-  // 인적공제 입력시 디바운싱된 실시간 계산
-  useEffect(() => {
+  // 인적공제 입력시 디바운싱된 실시간 계산 (useCallback으로 최적화)
+  const handlePersonalDeductionChange = useCallback(() => {
     if (Object.keys(formData.personalDeduction).length > 0) {
       // 기존 타이머 클리어
       if (personalTimerRef.current) {
@@ -84,7 +89,7 @@ const ResultChat = () => {
           id: `personal-${Date.now()}`,
           type: 'calculation', 
           title: '👥 인적공제 계산',
-          content: `기본공제: ${formatNumber(personalResult.basicDeduction)}원\n추가공제: ${formatNumber(personalResult.additionalDeduction)}원\n총 인적공제: ${formatNumber(personalResult.totalDeduction)}원`,
+          content: `기본공제: ${formatNumber(personalResult.basicDeduction || 0)}원\n추가공제: ${formatNumber(personalResult.additionalDeduction || 0)}원\n총 인적공제: ${formatNumber(personalResult.totalDeduction)}원`,
           timestamp: new Date()
         };
         
@@ -92,17 +97,21 @@ const ResultChat = () => {
         replaceChatMessage('personal-', newMessage);
       }, 500);
     }
+  }, [formData.personalDeduction, replaceChatMessage]);
+
+  useEffect(() => {
+    handlePersonalDeductionChange();
     
-    // 컴포넌트 언마운트시 타이머 정리
+    // 정리 함수
     return () => {
       if (personalTimerRef.current) {
         clearTimeout(personalTimerRef.current);
       }
     };
-  }, [formData.personalDeduction]);
+  }, [handlePersonalDeductionChange]);
 
-  // 연금보험료 입력시 디바운싱된 실시간 계산
-  useEffect(() => {
+  // 연금보험료 입력시 디바운싱된 실시간 계산 (useCallback으로 최적화)
+  const handlePensionChange = useCallback(() => {
     if (Object.keys(formData.pensionInsurance).length > 0 && formData.salary > 0) {
       // 기존 타이머 클리어
       if (pensionTimerRef.current) {
@@ -118,7 +127,7 @@ const ResultChat = () => {
           id: `pension-${Date.now()}`,
           type: 'calculation',
           title: '💳 연금보험료 계산',
-          content: `국민연금: ${formatNumber(pensionResult.nationalPension)}원\n건강보험료: ${formatNumber(pensionResult.healthInsurance)}원\n총 연금보험료: ${formatNumber(pensionResult.totalPension)}원`,
+          content: `국민연금: ${formatNumber(pensionResult.nationalPension || 0)}원\n건강보험료: ${formatNumber(pensionResult.healthInsurance || 0)}원\n총 연금보험료: ${formatNumber(pensionResult.totalPension)}원`,
           timestamp: new Date()
         };
         
@@ -126,26 +135,186 @@ const ResultChat = () => {
         replaceChatMessage('pension-', newMessage);
       }, 500);
     }
+  }, [formData.pensionInsurance, formData.salary, replaceChatMessage]);
+
+  useEffect(() => {
+    handlePensionChange();
     
-    // 컴포넌트 언마운트시 타이머 정리
+    // 정리 함수
     return () => {
       if (pensionTimerRef.current) {
         clearTimeout(pensionTimerRef.current);
       }
     };
-  }, [formData.pensionInsurance, formData.salary]);
+  }, [handlePensionChange]);
 
-  // 세액공제 입력시 디바운싱된 실시간 계산
+  // 특별소득공제 입력시 디바운싱된 실시간 계산 (새로 추가 - 2단계 한도 반영)
+  const handleSpecialDeductionChange = useCallback(() => {
+    if (Object.keys(formData.specialDeduction).length > 0) {
+      // 기존 타이머 클리어
+      if (specialTimerRef.current) {
+        clearTimeout(specialTimerRef.current);
+      }
+      
+      // 500ms 후에 메시지 교체 (디바운싱)
+      specialTimerRef.current = setTimeout(() => {
+        // 주택 관련 2단계 한도 체계 적용
+        const housingLimits = applyHousingDeductionLimits(
+          formData.specialDeduction, 
+          formData.otherDeduction || {}
+        );
+
+        let totalDeduction = 0;
+        let contentLines = [];
+
+        // 사회보험료 (한도 제한 없음)
+        if (formData.specialDeduction.insurance?.checked) {
+          const amount = formData.specialDeduction.insurance.amount || 0;
+          totalDeduction += amount;
+          contentLines.push(`사회보험료: ${amount.toLocaleString()}만원`);
+        }
+
+        // 주택임차차입금 (2단계 한도 적용)
+        if (formData.specialDeduction['housing-rent']?.checked) {
+          const originalAmount = formData.specialDeduction['housing-rent'].amount || 0;
+          const adjustedAmount = housingLimits.finalAmounts.housingRent;
+          totalDeduction += adjustedAmount;
+          
+          if (originalAmount !== adjustedAmount) {
+            contentLines.push(`주택임차차입금: ${adjustedAmount.toLocaleString()}만원 (조정됨: 원래 ${originalAmount.toLocaleString()}만원)`);
+          } else {
+            contentLines.push(`주택임차차입금: ${adjustedAmount.toLocaleString()}만원`);
+          }
+        }
+
+        // 장기주택저당차입금 (2단계 한도 적용)
+        if (formData.specialDeduction['housing-loan']?.checked) {
+          const originalAmount = formData.specialDeduction['housing-loan'].amount || 0;
+          const adjustedAmount = housingLimits.finalAmounts.housingLoan;
+          totalDeduction += adjustedAmount;
+          
+          if (originalAmount !== adjustedAmount) {
+            contentLines.push(`장기주택저당차입금: ${adjustedAmount.toLocaleString()}만원 (조정됨: 원래 ${originalAmount.toLocaleString()}만원)`);
+          } else {
+            contentLines.push(`장기주택저당차입금: ${adjustedAmount.toLocaleString()}만원`);
+          }
+        }
+
+        // 주택 관련 한도 초과 안내
+        let limitInfo = '';
+        if (housingLimits.firstStage.isExceeded) {
+          limitInfo += `\n⚠️ 1단계 한도(400만원) 초과로 비례 배분 적용`;
+        }
+        if (housingLimits.secondStage.isExceeded) {
+          limitInfo += `\n⚠️ 2단계 한도 초과로 장기주택저당차입금 조정`;
+        }
+
+        const newMessage = {
+          id: `special-${Date.now()}`,
+          type: 'calculation',
+          title: '🏠 특별소득공제 계산',
+          content: `${contentLines.join('\n')}\n\n총 특별소득공제: ${totalDeduction.toLocaleString()}만원${limitInfo}`,
+          timestamp: new Date()
+        };
+        
+        // 기존 특별소득공제 메시지를 새 메시지로 교체
+        replaceChatMessage('special-', newMessage);
+      }, 500);
+    }
+  }, [formData.specialDeduction, formData.otherDeduction, replaceChatMessage]);
+
   useEffect(() => {
+    handleSpecialDeductionChange();
+    
+    // 정리 함수
+    return () => {
+      if (specialTimerRef.current) {
+        clearTimeout(specialTimerRef.current);
+      }
+    };
+  }, [handleSpecialDeductionChange]);
+
+  // 그밖의 소득공제 입력시 디바운싱된 실시간 계산 (새로 추가 - 2단계 한도 반영)
+  const handleOtherDeductionChange = useCallback(() => {
+    if (Object.keys(formData.otherDeduction).length > 0) {
+      // 기존 타이머 클리어
+      if (otherTimerRef.current) {
+        clearTimeout(otherTimerRef.current);
+      }
+      
+      // 500ms 후에 메시지 교체 (디바운싱)
+      otherTimerRef.current = setTimeout(() => {
+        // 주택 관련 2단계 한도 체계 적용
+        const housingLimits = applyHousingDeductionLimits(
+          formData.specialDeduction || {},
+          formData.otherDeduction
+        );
+
+        let totalDeduction = 0;
+        let contentLines = [];
+
+        // 주택청약종합저축 (2단계 한도 적용)
+        if (formData.otherDeduction['housing-savings']?.checked) {
+          const originalAmount = formData.otherDeduction['housing-savings'].amount || 0;
+          const adjustedAmount = housingLimits.finalAmounts.housingSavings;
+          totalDeduction += adjustedAmount;
+          
+          if (originalAmount !== adjustedAmount) {
+            contentLines.push(`주택청약종합저축: ${adjustedAmount.toLocaleString()}만원 (조정됨: 원래 ${originalAmount.toLocaleString()}만원)`);
+          } else {
+            contentLines.push(`주택청약종합저축: ${adjustedAmount.toLocaleString()}만원`);
+          }
+        }
+
+        // 신용카드 등 (기존 로직 유지)
+        if (formData.otherDeduction['credit-card']?.checked) {
+          const amount = formData.otherDeduction['credit-card'].amount || 0;
+          totalDeduction += amount;
+          contentLines.push(`신용카드 등: ${amount.toLocaleString()}만원`);
+        }
+
+        // 한도 초과 안내
+        let limitInfo = '';
+        if (housingLimits.firstStage.isExceeded && formData.otherDeduction['housing-savings']?.checked) {
+          limitInfo += `\n⚠️ 주택청약종합저축이 1단계 한도(400만원) 적용으로 조정됨`;
+        }
+
+        const newMessage = {
+          id: `other-${Date.now()}`,
+          type: 'calculation',
+          title: '💳 그밖의 소득공제 계산',
+          content: `${contentLines.join('\n')}\n\n총 그밖의 소득공제: ${totalDeduction.toLocaleString()}만원${limitInfo}`,
+          timestamp: new Date()
+        };
+        
+        // 기존 그밖의 소득공제 메시지를 새 메시지로 교체
+        replaceChatMessage('other-', newMessage);
+      }, 500);
+    }
+  }, [formData.otherDeduction, formData.specialDeduction, replaceChatMessage]);
+
+  useEffect(() => {
+    handleOtherDeductionChange();
+    
+    // 정리 함수
+    return () => {
+      if (otherTimerRef.current) {
+        clearTimeout(otherTimerRef.current);
+      }
+    };
+  }, [handleOtherDeductionChange]);
+
+  // 세액공제 입력시 디바운싱된 실시간 계산 (useCallback으로 최적화)
+  const handleTaxDeductionChange = useCallback(() => {
     if (Object.keys(formData.taxDeduction).length > 0) {
       // 기존 타이머 클리어
       if (taxDeductionTimerRef.current) {
         clearTimeout(taxDeductionTimerRef.current);
       }
       
-      // 500ms 후에 메시지 추가 (디바운싱)
+      // 500ms 후에 메시지 교체 (디바운싱)
       taxDeductionTimerRef.current = setTimeout(() => {
-        const taxDeductions = {
+        const totalTaxDeductions = {
           child: Math.min((formData.taxDeduction.childCount || 0) * 150000, 300000),
           pensionAccount: Math.min((formData.taxDeduction.pensionAccount || 0) * 0.15, 300000),
           rent: Math.min((formData.taxDeduction.monthlyRent || 0) * (formData.taxDeduction.rentMonths || 0) * 0.1, 750000),
@@ -154,54 +323,70 @@ const ResultChat = () => {
           education: Math.min((formData.taxDeduction.educationExpenses || 0) * 0.15, 300000),
           donation: Math.min((formData.taxDeduction.donationAmount || 0) * 0.15, 300000)
         };
-
-        const totalTaxDeduction = Object.values(taxDeductions).reduce((sum, val) => sum + val, 0);
         
-        let deductionDetails = '';
-        if (taxDeductions.child > 0) deductionDetails += `자녀세액공제: ${formatNumber(taxDeductions.child)}원\n`;
-        if (taxDeductions.pensionAccount > 0) deductionDetails += `연금계좌공제: ${formatNumber(taxDeductions.pensionAccount)}원\n`;
-        if (taxDeductions.rent > 0) deductionDetails += `월세액공제: ${formatNumber(taxDeductions.rent)}원\n`;
-        if (taxDeductions.isa > 0) deductionDetails += `ISA공제: ${formatNumber(taxDeductions.isa)}원\n`;
-        if (taxDeductions.medical > 0) deductionDetails += `의료비공제: ${formatNumber(taxDeductions.medical)}원\n`;
-        if (taxDeductions.education > 0) deductionDetails += `교육비공제: ${formatNumber(taxDeductions.education)}원\n`;
-        if (taxDeductions.donation > 0) deductionDetails += `기부금공제: ${formatNumber(taxDeductions.donation)}원\n`;
+        const totalAmount = Object.values(totalTaxDeductions).reduce((sum, amount) => sum + amount, 0);
         
         const newMessage = {
-          id: `tax-deduction-${Date.now()}`,
+          id: `taxdeduction-${Date.now()}`,
           type: 'calculation',
-          title: '💎 세액공제 계산',
-          content: `${deductionDetails}총 세액공제: ${formatNumber(totalTaxDeduction)}원`,
+          title: '💰 세액공제 계산',
+          content: `자녀세액공제: ${formatNumber(totalTaxDeductions.child)}원\n연금계좌: ${formatNumber(totalTaxDeductions.pensionAccount)}원\n월세액공제: ${formatNumber(totalTaxDeductions.rent)}원\nISA: ${formatNumber(totalTaxDeductions.isa)}원\n의료비: ${formatNumber(totalTaxDeductions.medical)}원\n교육비: ${formatNumber(totalTaxDeductions.education)}원\n기부금: ${formatNumber(totalTaxDeductions.donation)}원\n\n총 세액공제: ${formatNumber(totalAmount)}원`,
           timestamp: new Date()
         };
         
         // 기존 세액공제 메시지를 새 메시지로 교체
-        replaceChatMessage('tax-deduction-', newMessage);
+        replaceChatMessage('taxdeduction-', newMessage);
       }, 500);
     }
+  }, [formData.taxDeduction, replaceChatMessage]);
+
+  useEffect(() => {
+    handleTaxDeductionChange();
     
-    // 컴포넌트 언마운트시 타이머 정리
+    // 정리 함수
     return () => {
       if (taxDeductionTimerRef.current) {
         clearTimeout(taxDeductionTimerRef.current);
       }
     };
-  }, [formData.taxDeduction]);
+  }, [handleTaxDeductionChange]);
 
   // 최종 계산 결과 (모든 데이터가 있을 때)
-  useEffect(() => {
+  const handleFinalCalculation = useCallback(() => {
     if (formData.salary > 0 && currentStep === 4) {
       const salaryInWon = formData.salary * 10000;
       const laborIncomeResult = calculateLaborIncomeDeduction(salaryInWon);
       const personalResult = calculatePersonalDeduction(formData.personalDeduction);
       const pensionResult = calculatePensionInsurance(formData.pensionInsurance, salaryInWon);
       
+      // 주택 관련 2단계 한도 체계 적용
+      const housingLimits = applyHousingDeductionLimits(
+        formData.specialDeduction || {},
+        formData.otherDeduction || {}
+      );
+
+      // 특별소득공제 (2단계 한도 적용)
+      let specialDeductionTotal = 0;
+      if (formData.specialDeduction?.insurance?.checked) {
+        specialDeductionTotal += formData.specialDeduction.insurance.amount || 0;
+      }
+      specialDeductionTotal += housingLimits.finalAmounts.housingRent;
+      specialDeductionTotal += housingLimits.finalAmounts.housingLoan;
+
+      // 그밖의 소득공제 (2단계 한도 적용)
+      let otherDeductionTotal = 0;
+      otherDeductionTotal += housingLimits.finalAmounts.housingSavings;
+      if (formData.otherDeduction?.['credit-card']?.checked) {
+        otherDeductionTotal += formData.otherDeduction['credit-card'].amount || 0;
+      }
+      
       const taxBaseResult = calculateTaxBaseAndAmount({
         salary: salaryInWon,
         laborIncomeDeduction: laborIncomeResult.amount,
         personalDeduction: personalResult.totalDeduction,
         pensionDeduction: pensionResult.totalPension,
-        specialDeduction: 0,
-        otherDeduction: 0
+        specialDeduction: specialDeductionTotal * 10000, // 만원 → 원 변환
+        otherDeduction: otherDeductionTotal * 10000 // 만원 → 원 변환
       });
       
       const laborTaxDeduction = calculateLaborIncomeTaxDeduction(taxBaseResult.calculatedTax);
@@ -225,46 +410,59 @@ const ResultChat = () => {
         previousTax: 0
       });
 
+      // 주택 관련 한도 적용 안내 추가
+      let housingLimitNotice = '';
+      if (housingLimits.firstStage.isExceeded || housingLimits.secondStage.isExceeded) {
+        housingLimitNotice = '\n\n🏠 주택 관련 종합한도 적용됨';
+        if (housingLimits.firstStage.isExceeded) {
+          housingLimitNotice += '\n• 1단계 한도(400만원) 초과로 비례 배분';
+        }
+        if (housingLimits.secondStage.isExceeded) {
+          housingLimitNotice += '\n• 2단계 한도 초과로 장기주택저당차입금 조정';
+        }
+      }
+
       const finalMessage = {
         id: `final-${Date.now()}`,
         type: 'result',
         title: '🎉 최종 계산 완료!',
-        content: `과세표준: ${formatNumber(taxBaseResult.taxBase)}원\n산출세액: ${formatNumber(taxBaseResult.calculatedTax)}원\n세액공제 총액: ${formatNumber(finalResult.totalTaxDeduction)}원\n\n🎊 최종 결정세액: ${formatNumber(finalResult.finalTax)}원`,
+        content: `과세표준: ${formatNumber(taxBaseResult.taxBase)}원\n산출세액: ${formatNumber(taxBaseResult.calculatedTax)}원\n세액공제 총액: ${formatNumber(finalResult.totalTaxDeduction)}원\n\n🎊 최종 결정세액: ${formatNumber(finalResult.finalTax)}원${housingLimitNotice}`,
         timestamp: new Date()
       };
       
       // 기존 최종 결과 메시지를 새 메시지로 교체
       replaceChatMessage('final-', finalMessage);
     }
-  }, [currentStep, formData]);
+  }, [currentStep, formData, replaceChatMessage]);
+
+  useEffect(() => {
+    handleFinalCalculation();
+  }, [handleFinalCalculation]);
 
   return (
     <div className="main-card results" style={{ display: 'block' }}>
       <h3 className="text-xl font-semibold mb-4">계산 결과</h3>
       <div className="space-y-2">
         {chatMessages.length > 0 ? (
-          chatMessages.map((message, index) => (
-            <div key={message.id || index} className="p-3 bg-gray-100 rounded-lg">
-              {message.title && (
-                <h4 className="mb-2 text-sm font-bold text-gray-800">{message.title}</h4>
-              )}
-              <div className="text-sm text-gray-700 whitespace-pre-line">
-                {message.content}
+          chatMessages.map((message) => (
+            <div key={ message.id} className={`message ${message.type}`}>
+              <div className="message-header">
+                <span className="message-title">{message.title}</span>
+                <span className="message-time">
+                  {message.timestamp.toLocaleTimeString()}
+                </span>
               </div>
-              {message.timestamp && (
-                <div className="mt-2 text-xs text-gray-500">
-                  {new Date(message.timestamp).toLocaleTimeString()}
-                </div>
-              )}
+              <div className="message-content">
+                {message.content.split('\n').map((line, index) => (
+                  <div key={index}>{line}</div>
+                ))}
+              </div>
             </div>
           ))
         ) : (
-          <div className="p-3 bg-gray-100 rounded-lg text-center text-gray-500">
-            <div className="space-y-2">
-              <div className="text-2xl">📊</div>
-              <p className="text-sm">입력하시는 정보에 따라</p>
-              <p className="text-sm">실시간으로 계산 결과가 표시됩니다</p>
-            </div>
+          <div className="no-results">
+            <p>📊 총급여를 입력하면 실시간으로 계산 결과가 표시됩니다.</p>
+            <p>주택 관련 소득공제는 2단계 종합한도 체계가 자동으로 적용됩니다.</p>
           </div>
         )}
       </div>
@@ -272,4 +470,4 @@ const ResultChat = () => {
   );
 };
 
-export default ResultChat; 
+export default ResultChat;

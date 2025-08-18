@@ -678,3 +678,354 @@ input[type="checkbox"]:focus {
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
 }
+
+/* ========================================
+   주택 관련 2단계 종합한도 체계 추가 스타일
+   기존 index.css 파일 끝부분에 추가하세요
+   ======================================== */
+
+/* 주택 관련 한도 안내 섹션 */
+.housing-limits-summary {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 15px 0;
+  border: 1px solid #e9ecef;
+}
+
+.limit-stage {
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: white;
+  border-radius: 6px;
+  border-left: 4px solid #3498db;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.limit-stage:last-child {
+  margin-bottom: 0;
+}
+
+.limit-stage h4 {
+  margin: 0 0 10px 0;
+  color: #2c3e50;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.limit-details {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #495057;
+}
+
+.limit-details p {
+  margin: 5px 0;
+}
+
+/* 계산 결과 그리드 */
+.result-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.result-item {
+  display: flex;
+  flex-direction: column;
+  padding: 15px;
+  background-color: white;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+  text-align: center;
+  transition: box-shadow 0.2s ease;
+}
+
+.result-item:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.result-item.highlight {
+  background-color: #e3f2fd;
+  border-color: #2196f3;
+}
+
+.result-item .label {
+  font-size: 12px;
+  color: #6c757d;
+  margin-bottom: 5px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.result-item .value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #2c3e50;
+}
+
+.result-item.highlight .value {
+  color: #1976d2;
+}
+
+/* 대출 상세정보 입력 */
+.loan-details {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 15px 0;
+  border: 1px solid #dee2e6;
+}
+
+.loan-details h4 {
+  margin: 0 0 15px 0;
+  color: #2c3e50;
+  font-size: 16px;
+  border-bottom: 2px solid #3498db;
+  padding-bottom: 8px;
+}
+
+/* 신용카드 사용액 입력 그리드 */
+.input-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 15px;
+  margin: 15px 0;
+}
+
+.card-usage-inputs {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 15px 0;
+  border: 1px solid #e9ecef;
+}
+
+.card-usage-inputs h4 {
+  margin: 0 0 15px 0;
+  color: #2c3e50;
+  font-size: 16px;
+  border-bottom: 2px solid #27ae60;
+  padding-bottom: 8px;
+}
+
+/* 계산 미리보기 */
+.calculation-preview {
+  background-color: #e8f5e8;
+  border: 1px solid #c3e6c3;
+  border-radius: 6px;
+  padding: 15px;
+  margin-top: 15px;
+}
+
+.calculation-preview h4 {
+  margin: 0 0 10px 0;
+  color: #2c3e50;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.calculation-preview p {
+  margin: 5px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* 경고 메시지 */
+.warning-message {
+  background-color: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 6px;
+  padding: 12px;
+  margin: 10px 0;
+}
+
+.warning-message p {
+  margin: 0;
+  color: #856404;
+}
+
+/* 한도 알림 메시지 */
+.limit-notice {
+  background-color: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin-top: 10px;
+}
+
+.limit-notice p {
+  margin: 0;
+  font-size: 12px;
+  color: #856404;
+}
+
+/* 조정된 금액 표시 */
+.original-amount {
+  text-decoration: line-through;
+  color: #999;
+  margin-right: 8px;
+  font-size: 14px;
+}
+
+.final-amount {
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+/* 입력 그룹 */
+.input-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.input-group .form-input {
+  flex: 1;
+}
+
+.input-group .btn-secondary {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+  white-space: nowrap;
+}
+
+.input-group .btn-secondary:hover {
+  background-color: #5a6268;
+}
+
+/* 최종 결과 강조 */
+.final-result {
+  background-color: #e3f2fd;
+  border: 2px solid #2196f3;
+  border-radius: 8px;
+  padding: 15px;
+  margin: 15px 0;
+  text-align: center;
+}
+
+.final-result p {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1976d2;
+}
+
+/* 계산 과정 상세 표시 */
+.calculation-breakdown {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 15px 0;
+  border: 1px solid #e9ecef;
+}
+
+.calculation-steps {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.calculation-steps p {
+  margin: 8px 0;
+  padding: 5px 0;
+}
+
+.sub-details {
+  background-color: #e9ecef;
+  border-radius: 4px;
+  padding: 10px;
+  margin: 10px 0;
+  font-size: 13px;
+  border-left: 3px solid #6c757d;
+}
+
+.sub-details p {
+  margin: 3px 0;
+}
+
+/* 성공/에러 메시지 */
+.result-message {
+  padding: 15px;
+  border-radius: 6px;
+  margin: 15px 0;
+}
+
+.result-message.success {
+  background-color: #d4edda;
+  border: 1px solid #c3e6cb;
+  color: #155724;
+}
+
+.result-message.error {
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+}
+
+/* 계산 공식 표시 */
+.calculation-formula {
+  background-color: #e7f3ff;
+  border: 1px solid #b3d9ff;
+  border-radius: 6px;
+  padding: 12px;
+  margin: 10px 0;
+  font-family: 'Courier New', monospace;
+}
+
+.calculation-formula p {
+  margin: 5px 0;
+  font-size: 14px;
+}
+
+/* 반응형 디자인 개선 */
+@media (max-width: 768px) {
+  .result-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .input-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .input-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .limit-stage {
+    padding: 10px;
+  }
+  
+  .calculation-breakdown {
+    padding: 15px;
+  }
+  
+  .housing-limits-summary {
+    padding: 15px;
+  }
+}
+
+@media (max-width: 480px) {
+  .result-item .value {
+    font-size: 16px;
+  }
+  
+  .limit-stage h4 {
+    font-size: 14px;
+  }
+  
+  .calculation-preview {
+    padding: 10px;
+  }
+  
+  .loan-details {
+    padding: 15px;
+  }
+}

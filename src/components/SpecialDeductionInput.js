@@ -1,32 +1,29 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTax } from '../context/TaxContext';
 import { 
   calculateSpecialDeduction, 
   calculateInsuranceAmount, 
   calculateHousingRentDeduction, 
   calculateHousingLoanDeduction,
+  calculateHousingLoanMaxDeduction,
+  applyHousingDeductionLimits, // 새로 추가된 함수
   formatNumber 
 } from '../utils/calc';
 
 /**
- * 특별소득공제 입력 컴포넌트 (무한렌더링 해결된 버전)
- * useEffect에서 Context 업데이트 제거, 핸들러에서 디바운싱된 업데이트만 사용
+ * 특별소득공제 입력 컴포넌트 - 주택 관련 2단계 종합한도 적용
+ * useEffect 무한렌더링 방지를 위한 최적화 적용
  */
-const SpecialDeductionInput = React.memo(() => {
+const SpecialDeductionInput = () => {
   const { formData, setSpecialDeduction } = useTax();
-  
-  // ✅ 안전한 초기값 설정
-  const initialSpecialDeduction = useMemo(() => 
-    formData.specialDeduction || {}, 
-    [formData.specialDeduction]
-  );
-  
-  const salary = formData.salary;
+  const specialDeduction = formData.specialDeduction || {};
+  const otherDeduction = formData.otherDeduction || {}; // 주택청약종합저축 포함
+  const salary = formData.salary; // 만원 단위
 
   // 로컬 상태로 입력값 관리
   const [localData, setLocalData] = useState({
     insurance: { checked: false, amount: 0 },
-    'housing-rent': { checked: false, amount: 0 },
+    'housing-rent': { checked: false, amount: 0, inputAmount: 0 },
     'housing-loan': { 
       checked: false, 
       amount: 0, 
@@ -40,532 +37,506 @@ const SpecialDeductionInput = React.memo(() => {
     }
   });
 
-  // ✅ Context 데이터 초기화만 (순환 참조 방지)
+  // 계산 결과 상태
+  const [calculationResult, setCalculationResult] = useState({
+    totalDeduction: 0,
+    details: [],
+    housingLimitDetails: null,
+    errors: []
+  });
+
+  // Context 데이터가 변경되면 로컬 상태 동기화 (useCallback으로 최적화)
+  const syncLocalData = useCallback(() => {
+    if (specialDeduction && Object.keys(specialDeduction).length > 0) {
+      setLocalData(prev => ({
+        ...prev,
+        ...specialDeduction
+      }));
+    }
+  }, [specialDeduction]);
+
   useEffect(() => {
-    if (initialSpecialDeduction && Object.keys(initialSpecialDeduction).length > 0) {
-      const isChanged = JSON.stringify(localData) !== JSON.stringify(initialSpecialDeduction);
-      if (isChanged) {
-        setLocalData(prev => ({
-          ...prev,
-          ...initialSpecialDeduction
-        }));
+    syncLocalData();
+  }, [syncLocalData]);
+
+  // 주택 관련 2단계 한도 체계를 적용한 계산 (useMemo로 최적화)
+  const housingLimits = useMemo(() => {
+    return applyHousingDeductionLimits(localData, otherDeduction);
+  }, [localData, otherDeduction]);
+
+  // 특별소득공제 계산 (useCallback으로 최적화)
+  const calculateDeductions = useCallback(() => {
+    try {
+      let totalDeduction = 0;
+      let details = [];
+      let errors = [];
+      
+      // 1. 사회보험료 계산 (기존 로직 유지)
+      if (localData?.insurance?.checked) {
+        const insuranceAmount = localData.insurance.amount || 0;
+        totalDeduction += insuranceAmount;
+        details.push({
+          type: 'insurance',
+          name: '사회보험료',
+          amount: insuranceAmount,
+          rate: '100%',
+          maxLimit: null,
+          description: '건강보험, 고용보험, 노인장기요양보험료'
+        });
       }
-    }
-  }, [initialSpecialDeduction]); // localData 제거로 순환 참조 방지
-
-  // ❌ 제거: useEffect에서 Context 업데이트하던 부분 - 무한렌더링 원인!
-
-  // ✅ 디바운스 유틸리티 함수
-  const debounce = useCallback((func, wait) => {
-    let timeout;
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
+      
+      // 2. 주택임차차입금 (2단계 한도 적용)
+      if (localData?.['housing-rent']?.checked) {
+        const originalAmount = localData['housing-rent'].amount || 0;
+        const adjustedAmount = housingLimits.finalAmounts.housingRent;
+        
+        totalDeduction += adjustedAmount;
+        details.push({
+          type: 'housing-rent',
+          name: '주택임차차입금',
+          amount: adjustedAmount,
+          originalAmount: originalAmount,
+          rate: '40%',
+          maxLimit: '2단계 한도 적용',
+          description: '전세자금 대출 원리금 상환액',
+          limitApplied: originalAmount !== adjustedAmount,
+          limitDetails: housingLimits.firstStage
+        });
+      }
+      
+      // 3. 장기주택저당차입금 (2단계 한도 적용)
+      if (localData?.['housing-loan']?.checked) {
+        const originalAmount = localData['housing-loan'].amount || 0;
+        const adjustedAmount = housingLimits.finalAmounts.housingLoan;
+        
+        totalDeduction += adjustedAmount;
+        details.push({
+          type: 'housing-loan',
+          name: '장기주택저당차입금',
+          amount: adjustedAmount,
+          originalAmount: originalAmount,
+          rate: '대출조건별',
+          maxLimit: housingLimits.secondStage.limit,
+          description: '주택구입 대출 이자상환액',
+          limitApplied: originalAmount !== adjustedAmount,
+          limitDetails: housingLimits.secondStage
+        });
+      }
+      
+      const result = {
+        totalDeduction: Math.round(totalDeduction),
+        details,
+        errors,
+        housingLimitDetails: housingLimits,
+        isValid: errors.length === 0
       };
-      clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
-    };
-  }, []);
 
-  // ✅ 디바운싱된 Context 업데이트 함수
-  const debouncedUpdateContext = useMemo(
-    () => debounce((data) => {
-      console.log('SpecialDeduction Context 업데이트:', data);
-      setSpecialDeduction(data);
-    }, 300),
-    [setSpecialDeduction, debounce]
-  );
+      setCalculationResult(result);
+      
+      // Context에 결과 저장 (디바운싱 적용)
+      const timeoutId = setTimeout(() => {
+        setSpecialDeduction({
+          ...localData,
+          calculationResult: result
+        });
+      }, 300);
 
-  // ✅ 계산 함수들 메모이제이션
-  const calculateInsurance = useCallback(() => {
-    const annualAmount = calculateInsuranceAmount(salary);
-    const monthlyAmount = Math.round(annualAmount / 12);
-    
-    return {
-      monthly: monthlyAmount,
-      annual: annualAmount
-    };
-  }, [salary]);
-
-  const calculateHousingRent = useCallback((inputAmount) => {
-    return calculateHousingRentDeduction(inputAmount);
-  }, []);
-
-  const calculateHousingLoan = useCallback((inputAmount, details) => {
-    return calculateHousingLoanDeduction(inputAmount, details);
-  }, []);
-
-  // ✅ 설문지 옵션들 메모이제이션
-  const surveyOptions = useMemo(() => [
-    {
-      id: 'insurance',
-      label: '사회보험료(건강보험, 고용보험, 노인장기요양보험)를 납부하셨나요?',
-      description: '사회보험료는 매월 급여에서 자동으로 공제되며, 납부한 금액의 100%를 공제받을 수 있습니다.',
-      type: 'checkbox',
-      hasAutoCalc: true
-    },
-    {
-      id: 'housing-rent',
-      label: '주택임차차입금 원리금을 상환하셨나요?',
-      description: '무주택 세대주가 전세나 월세 살면서 대출받은 돈의 원금과 이자를 갚을 때 일정 부분 공제받을 수 있습니다.',
-      type: 'checkbox',
-      hasAmount: true
-    },
-    {
-      id: 'housing-loan',
-      label: '장기주택저당차입금 이자를 상환하셨나요?',
-      description: '무주택 또는 1주택 세대주가 주택을 구입할 때 대출받은 돈의 이자를 갚을 때 일정 부분 공제받을 수 있습니다.',
-      type: 'checkbox',
-      hasAmount: true,
-      hasDetails: true
+      return () => clearTimeout(timeoutId);
+      
+    } catch (error) {
+      console.error('특별소득공제 계산 오류:', error);
+      setCalculationResult({
+        totalDeduction: 0,
+        details: [],
+        errors: ['계산 중 오류가 발생했습니다.'],
+        housingLimitDetails: null,
+        isValid: false
+      });
     }
-  ], []);
+  }, [localData, housingLimits, setSpecialDeduction]);
 
-  // ✅ 체크박스 상태 확인 함수 최적화
-  const getCheckboxState = useCallback((option) => {
-    const fieldData = localData[ option.id];
-    return fieldData?.checked || false;
-  }, [localData]);
+  // 계산 실행 (useEffect로 디바운싱 적용하여 무한렌더링 방지)
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      calculateDeductions();
+    }, 300);
 
-  // ✅ 입력값 확인 함수 (사용자가 입력한 원래 값)
-  const getInputValue = useCallback((optionId) => {
-    const fieldData = localData[optionId];
-    return fieldData?.inputAmount || 0;  // ✅ inputAmount 사용 (사용자 입력값)
-  }, [localData]);
+    return () => clearTimeout(timeoutId);
+  }, [calculateDeductions]);
 
-  // ✅ 계산된 공제액 확인 함수 (결과 표시용)
-  const getCalculatedAmount = useCallback((optionId) => {
-    const fieldData = localData[optionId];
-    return fieldData?.amount || 0;  // ✅ amount 사용 (계산된 공제액)
-  }, [localData]);
-
-  // ✅ 상세정보 확인 함수 최적화
-  const getDetailsValue = useCallback((field) => {
-    const value = localData['housing-loan']?.details?.[field] || '';
-    return value;
-  }, [localData]);
-
-  // ✅ 계약일에 따른 상환기간 옵션 메모이제이션
-  const getRepaymentPeriodOptions = useMemo(() => {
-    const contractDate = getDetailsValue('contractDate');
-    const isAfter2012 = contractDate && new Date(contractDate) >= new Date('2012-01-01');
-    
-    if (isAfter2012) {
-      return [
-        { value: "", label: "선택하세요" },
-        { value: "30", label: "30년 이상" },
-        { value: "15", label: "15년 이상" },
-        { value: "10", label: "10~15년" }
-      ];
-    } else {
-      return [
-        { value: "", label: "선택하세요" },
-        { value: "30", label: "30년 이상" },
-        { value: "15", label: "15년 이상" },
-        { value: "less", label: "15년 미만" }
-      ];
-    }
-  }, [getDetailsValue]);
-
-  // ✅ 상세정보 업데이트 핸들러 (무한렌더링 해결)
-  const handleDetailsChange = useCallback((detailKey, value) => {
-    console.log('handleDetailsChange 호출:', { detailKey, value });
-    
+  // 체크박스 변경 핸들러 (useCallback으로 최적화)
+  const handleCheckboxChange = useCallback((deductionType, checked) => {
     setLocalData(prev => {
       const updated = {
         ...prev,
-        'housing-loan': {
-          ...prev['housing-loan'],
-          details: {
-            ...prev['housing-loan'].details,
-            [detailKey]: value
-          }
+        [deductionType]: {
+          ...prev[deductionType],
+          checked,
+          amount: checked ? prev[deductionType]?.amount || 0 : 0
         }
       };
-      
-      // 상세정보 변경 시 금액 재계산
-      if (updated['housing-loan'].inputAmount > 0) {
-        const inputAmount = updated['housing-loan'].inputAmount;
-        const newDetails = updated['housing-loan'].details;
-        const recalculatedAmount = calculateHousingLoan(inputAmount, newDetails);
-        updated['housing-loan'].amount = recalculatedAmount;
-        
-        if (process.env.NODE_ENV === 'development') {
-          console.log('재계산된 금액:', recalculatedAmount);
-        }
+
+      // 사회보험료 자동계산 (기존 로직 유지)
+      if (deductionType === 'insurance' && checked && salary > 0) {
+        const autoAmount = calculateInsuranceAmount(salary);
+        updated.insurance.amount = autoAmount;
       }
-      
-      // ✅ 디바운싱된 Context 업데이트 (무한렌더링 방지)
-      debouncedUpdateContext(updated);
-      
+
       return updated;
     });
-  }, [calculateHousingLoan, debouncedUpdateContext]);
+  }, [salary]);
 
-  // ✅ 입력값 변경 핸들러 (무한렌더링 해결)
-  const handleInputChange = useCallback((field, value, type = 'checkbox') => {
-    console.log('handleInputChange 호출:', { field, value, type });
+  // 금액 입력 핸들러 (useCallback으로 최적화)
+  const handleAmountChange = useCallback((deductionType, value) => {
+    const numValue = Math.max(0, parseFloat(value) || 0);
     
-    setLocalData(prev => {
-      const updated = { ...prev };
-      
-      if (type === 'checkbox') {
-        let autoAmount = 0;
-        
-        if (value && field === 'insurance') {
-          autoAmount = calculateInsurance().annual;
-        }
-        
-        if (field === 'housing-loan' && value) {
-          updated[field] = {
-            checked: true,
-            amount: 0,
-            inputAmount: 0,
-            details: {
-              contractDate: '',
-              repaymentPeriod: '',
-              interestType: '',
-              repaymentType: ''
-            }
-          };
-        } else {
-          updated[field] = {
-            ...updated[field],
-            checked: value,
-            amount: value ? autoAmount : 0,
-            inputAmount: value ? autoAmount : 0  // ✅ 자동계산된 경우에도 inputAmount 설정
-          };
-        }
-      } else if (type === 'amount') {
-        const numValue = parseInt(value) || 0;
-        let calculatedAmount = numValue;
-        
-        if (field === 'housing-rent') {
-          calculatedAmount = calculateHousingRent(numValue);
-        } else if (field === 'housing-loan') {
-          const details = updated[field]?.details || {};
-          calculatedAmount = calculateHousingLoan(numValue, details);
-        }
-        
-        updated[field] = {
-          ...updated[field],
-          checked: numValue > 0,
-          amount: calculatedAmount,
-          inputAmount: numValue
-        };
+    setLocalData(prev => ({
+      ...prev,
+      [deductionType]: {
+        ...prev[deductionType],
+        inputAmount: numValue,
+        amount: deductionType === 'housing-rent' 
+          ? calculateHousingRentDeduction(numValue)
+          : deductionType === 'housing-loan'
+          ? calculateHousingLoanDeduction(numValue, prev[deductionType].details)
+          : numValue
       }
-      
-      console.log('로컬 상태 업데이트:', updated);
-      
-      // ✅ 디바운싱된 Context 업데이트 (무한렌더링 방지)
-      // ❌ 제거: setSpecialDeduction(updated); - 무한렌더링 원인!
-      debouncedUpdateContext(updated);
-      
-      return updated;
-    });
-  }, [calculateInsurance, calculateHousingRent, calculateHousingLoan, debouncedUpdateContext]);
+    }));
+  }, []);
 
-  // ✅ 실시간 계산 결과 메모이제이션
-  const calculationResult = useMemo(() => {
-    return calculateSpecialDeduction(localData, salary);
-  }, [localData, salary]);
+  // 대출 상세정보 변경 핸들러 (useCallback으로 최적화)
+  const handleLoanDetailsChange = useCallback((field, value) => {
+    setLocalData(prev => {
+      const updatedDetails = {
+        ...prev['housing-loan'].details,
+        [field]: value
+      };
+      
+      const maxDeduction = calculateHousingLoanMaxDeduction(updatedDetails);
+      const inputAmount = prev['housing-loan'].inputAmount || 0;
+      
+      return {
+        ...prev,
+        'housing-loan': {
+          ...prev['housing-loan'],
+          details: updatedDetails,
+          amount: Math.min(inputAmount, maxDeduction)
+        }
+      };
+    });
+  }, []);
+
+  // 사회보험료 자동계산 (useCallback으로 최적화)
+  const handleAutoCalculateInsurance = useCallback(() => {
+    if (!salary || salary <= 0) {
+      alert('총급여를 먼저 입력해주세요.');
+      return;
+    }
+    
+    const autoAmount = calculateInsuranceAmount(salary);
+    setLocalData(prev => ({
+      ...prev,
+      insurance: {
+        ...prev.insurance,
+        checked: true,
+        amount: autoAmount
+      }
+    }));
+  }, [salary]);
 
   return (
-    <div className="container">
-      {/* 메인 카드 */}
-      <div className="main-card">
-        {/* 급여 정보 표시 */}
-        {salary > 0 && (
-          <div className="form-section" style={{ 
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            borderRadius: '15px',
-            padding: '20px',
-            color: 'white',
-            marginBottom: '30px'
-          }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '10px' }}>
-              💰 입력하신 급여 정보
-            </h3>
-            <p style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>
-              총급여: {salary.toLocaleString()}만원
-            </p>
+    <div className="deduction-section">
+      <div className="container">
+        <h2 className="section-title">특별소득공제</h2>
+        
+        {/* 주택 관련 종합한도 안내 (2단계 한도 적용시에만 표시) */}
+        {calculationResult?.housingLimitDetails && 
+         (calculationResult.housingLimitDetails.firstStage.isExceeded || 
+          calculationResult.housingLimitDetails.secondStage.isExceeded) && (
+          <div className="info-section" style={{ backgroundColor: ' #fff3cd', border: '1px solid #ffeaa7', borderRadius: '8px', padding: '15px', marginBottom: '20px' }}>
+            <h4>🏠 주택 관련 2단계 종합한도 체계 적용</h4>
+            <div style={{ fontSize: '14px', lineHeight: '1.6' }}>
+              <p><strong>1단계:</strong> 주택청약종합저축 + 주택임차차입금 ≤ 400만원</p>
+              <p><strong>2단계:</strong> (1단계 결과) + 장기주택저당차입금 ≤ 개별한도</p>
+              
+              {calculationResult.housingLimitDetails.firstStage.isExceeded && (
+                <div style={{ color: ' #e74c3c', marginTop: '10px' }}>
+                  <p><strong>⚠️ 1단계 한도 초과:</strong> 비례 배분으로 조정되었습니다.</p>
+                  <p>• 원래 합계: {calculationResult.housingLimitDetails.firstStage.originalTotal}만원</p>
+                  <p>• 조정 후: {calculationResult.housingLimitDetails.firstStage.total}만원</p>
+                </div>
+              )}
+              
+              {calculationResult.housingLimitDetails.secondStage.isExceeded && (
+                <div style={{ color: ' #e74c3c', marginTop: '10px' }}>
+                  <p><strong>⚠️ 2단계 한도 초과:</strong> 장기주택저당차입금이 우선 조정되었습니다.</p>
+                  <p>• 원래 금액: {calculationResult.housingLimitDetails.secondStage.originalAmount}만원</p>
+                  <p>• 조정 후: {calculationResult.housingLimitDetails.secondStage.housingLoan}만원</p>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
-        {/* 설문지 항목들 */}
+        {/* 1. 사회보험료 (기존 로직 유지) */}
         <div className="form-section">
-          {surveyOptions.map((option) => (
-            <div key={ option.id} className="form-group" style={{ 
-              border: '2px solid #e0e6ed', 
-              borderRadius: '15px', 
-              padding: '20px', 
-              marginBottom: '15px',
-              backgroundColor: 'rgba(255,255,255,0.9)',
-              transition: 'all 0.3s ease',
-              borderColor: getCheckboxState(option) ? ' #667eea' : ' #e0e6ed'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px' }}>
-                <input
-                  type="checkbox"
-                  id={`special-${ option.id}`}
-                  checked={getCheckboxState(option)}
-                  onChange={(e) => handleInputChange( option.id, e.target.checked, 'checkbox')}
-                  style={{
-                    width: '20px',
-                    height: '20px',
-                    accentColor: ' #667eea'
-                  }}
-                />
-                <div style={{ flex: 1 }}>
-                  <label 
-                    htmlFor={`special-${ option.id}`}
-                    style={{ 
-                      fontSize: '1.1rem', 
-                      fontWeight: 'bold', 
-                      color: ' #2c3e50',
-                      cursor: 'pointer',
-                      marginBottom: '8px',
-                      display: 'block'
-                    }}
+          <div className="form-row">
+            <label className="form-label">
+              <input
+                type="checkbox"
+                checked={localData.insurance?.checked || false}
+                onChange={(e) => handleCheckboxChange('insurance', e.target.checked)}
+                className="form-checkbox"
+              />
+              사회보험료(건강보험, 고용보험, 노인장기요양보험)를 납부하셨나요?
+            </label>
+          </div>
+          
+          <div className="form-description">
+            <p>사회보험료는 매월 급여에서 자동으로 공제되며, 납부한 금액의 100%를 공제받을 수 있습니다.</p>
+          </div>
+
+          {localData.insurance?.checked && (
+            <div className="deduction-details">
+              <div className="input-row">
+                <label>연간 납부액 (만원)</label>
+                <div className="input-group">
+                  <input
+                    type="number"
+                    value={localData.insurance?.amount || 0}
+                    onChange={(e) => setLocalData(prev => ({
+                      ...prev,
+                      insurance: { ...prev.insurance, amount: parseFloat(e.target.value) || 0 }
+                    }))}
+                    placeholder="0"
+                    className="form-input"
+                    min="0"
+                    step="1"
+                  />
+                  <button 
+                    type="button" 
+                    onClick={handleAutoCalculateInsurance}
+                    className="btn-secondary"
+                    style={{ marginLeft: '10px', whiteSpace: 'nowrap' }}
                   >
-                    {option.label}
-                  </label>
-                  <p style={{ 
-                    color: ' #7f8c8d', 
-                    fontSize: '0.9rem', 
-                    margin: 0,
-                    lineHeight: '1.5'
-                  }}>
-                    {option.description}
+                    자동계산
+                  </button>
+                </div>
+              </div>
+              
+              {salary > 0 && (
+                <div className="calculation-preview">
+                  <p><strong>예상 연간 사회보험료:</strong> {calculateInsuranceAmount(salary).toLocaleString()}만원</p>
+                  <p style={{ fontSize: '12px', color: '#666' }}>
+                    (총급여 {salary.toLocaleString()}만원 × 3.545% = 건강보험+고용보험+노인장기요양보험)
                   </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* 2. 주택임차차입금 (2단계 한도 적용) */}
+        <div className="form-section">
+          <div className="form-row">
+            <label className="form-label">
+              <input
+                type="checkbox"
+                checked={localData['housing-rent']?.checked || false}
+                onChange={(e) => handleCheckboxChange('housing-rent', e.target.checked)}
+                className="form-checkbox"
+              />
+              주택임차차입금 원리금을 상환하셨나요?
+            </label>
+          </div>
+          
+          <div className="form-description">
+            <p>무주택 세대주가 전세나 월세를 위해 대출받은 돈의 원금과 이자를 갚을 때 40% 공제받을 수 있습니다.</p>
+            <p style={{ color: ' #e74c3c', fontSize: '14px' }}>
+              ⚠️ 주택청약종합저축과 합하여 1단계 한도(400만원)가 적용됩니다.
+            </p>
+          </div>
+
+          {localData['housing-rent']?.checked && (
+            <div className="deduction-details">
+              <div className="input-row">
+                <label>연간 원리금 상환액 (만원)</label>
+                <input
+                  type="number"
+                  value={localData['housing-rent']?.inputAmount || 0}
+                  onChange={(e) => handleAmountChange('housing-rent', e.target.value)}
+                  placeholder="0"
+                  className="form-input"
+                  min="0"
+                  step="1"
+                />
+              </div>
+              
+              <div className="calculation-preview">
+                <p><strong>개별 공제액:</strong> {calculateHousingRentDeduction(localData['housing-rent']?.inputAmount || 0).toLocaleString()}만원</p>
+                <p><strong>최종 공제액:</strong> {(housingLimits.finalAmounts.housingRent || 0).toLocaleString()}만원</p>
+                <p style={{ fontSize: '12px', color: '#666' }}>
+                  (상환액 × 40%, 2단계 한도 체계 적용)
+                </p>
+                
+                {housingLimits.firstStage.isExceeded && (
+                  <p style={{ color: ' #e74c3c', fontSize: '12px' }}>
+                    ⚠️ 1단계 한도 초과로 조정됨
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 3. 장기주택저당차입금 (2단계 한도 적용) */}
+        <div className="form-section">
+          <div className="form-row">
+            <label className="form-label">
+              <input
+                type="checkbox"
+                checked={localData['housing-loan']?.checked || false}
+                onChange={(e) => handleCheckboxChange('housing-loan', e.target.checked)}
+                className="form-checkbox"
+              />
+              장기주택저당차입금 이자를 상환하셨나요?
+            </label>
+          </div>
+          
+          <div className="form-description">
+            <p>무주택 또는 1주택 세대주가 주택을 구입할 때 대출받은 돈의 이자를 갚을 때 일정 부분 공제받을 수 있습니다.</p>
+            <p style={{ color: ' #e74c3c', fontSize: '14px' }}>
+              ⚠️ 2단계 한도(개별한도) 내에서 1단계 공제 후 잔여한도만큼 공제됩니다.
+            </p>
+          </div>
+
+          {localData['housing-loan']?.checked && (
+            <div className="deduction-details">
+              {/* 대출 상세 정보 입력 (기존 로직 유지) */}
+              <div className="loan-details">
+                <h4>대출 상세정보</h4>
+                
+                <div className="input-row">
+                  <label>대출 계약일</label>
+                  <input
+                    type="date"
+                    value={localData['housing-loan']?.details?.contractDate || ''}
+                    onChange={(e) => handleLoanDetailsChange('contractDate', e.target.value)}
+                    className="form-input"
+                  />
+                </div>
+
+                <div className="input-row">
+                  <label>상환기간</label>
+                  <select
+                    value={localData['housing-loan']?.details?.repaymentPeriod || ''}
+                    onChange={(e) => handleLoanDetailsChange('repaymentPeriod', e.target.value)}
+                    className="form-input"
+                  >
+                    <option value="">선택하세요</option>
+                    <option value="less">10년 미만</option>
+                    <option value="10">10년 이상 15년 미만</option>
+                    <option value="15">15년 이상 30년 미만</option>
+                    <option value="30">30년 이상</option>
+                  </select>
+                </div>
+
+                <div className="input-row">
+                  <label>금리유형</label>
+                  <select
+                    value={localData['housing-loan']?.details?.interestType || ''}
+                    onChange={(e) => handleLoanDetailsChange('interestType', e.target.value)}
+                    className="form-input"
+                  >
+                    <option value="">선택하세요</option>
+                    <option value="fixed">고정금리</option>
+                    <option value="variable">변동금리</option>
+                  </select>
+                </div>
+
+                <div className="input-row">
+                  <label>상환방식</label>
+                  <select
+                    value={localData['housing-loan']?.details?.repaymentType || ''}
+                    onChange={(e) => handleLoanDetailsChange('repaymentType', e.target.value)}
+                    className="form-input"
+                  >
+                    <option value="">선택하세요</option>
+                    <option value="installment">원리금균등분할상환</option>
+                    <option value="other">기타</option>
+                  </select>
                 </div>
               </div>
 
-              {/* 자동계산 결과 표시 */}
-              {option.hasAutoCalc && salary > 0 && getCheckboxState(option) && (
-                <div style={{ 
-                  background: 'rgba(102, 126, 234, 0.1)',
-                  borderRadius: '8px',
-                  padding: '12px',
-                  marginBottom: '15px'
-                }}>
-                  <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 'bold', color: ' #667eea' }}>
-                    📊 자동 계산된 사회보험료
+              <div className="input-row">
+                <label>연간 이자상환액 (만원)</label>
+                <input
+                  type="number"
+                  value={localData['housing-loan']?.inputAmount || 0}
+                  onChange={(e) => handleAmountChange('housing-loan', e.target.value)}
+                  placeholder="0"
+                  className="form-input"
+                  min="0"
+                  step="1"
+                />
+              </div>
+              
+              <div className="calculation-preview">
+                <p><strong>개별 한도:</strong> {calculateHousingLoanMaxDeduction(localData['housing-loan']?.details || {}).toLocaleString()}만원</p>
+                <p><strong>개별 공제액:</strong> {calculateHousingLoanDeduction(localData['housing-loan']?.inputAmount || 0, localData['housing-loan']?.details || {}).toLocaleString()}만원</p>
+                <p><strong>최종 공제액:</strong> {(housingLimits.finalAmounts.housingLoan || 0).toLocaleString()}만원</p>
+                <p style={{ fontSize: '12px', color: '#666' }}>
+                  (이자상환액, 개별한도 및 2단계 종합한도 적용)
+                </p>
+                
+                {housingLimits.secondStage.isExceeded && (
+                  <p style={{ color: ' #e74c3c', fontSize: '12px' }}>
+                    ⚠️ 2단계 한도 초과로 조정됨
                   </p>
-                  <p style={{ margin: '5px 0 0 0', fontSize: '0.8rem', color: '#555' }}>
-                    월 납부액: {calculateInsurance().monthly.toLocaleString()}만원
-                  </p>
-                  <p style={{ margin: '3px 0 0 0', fontSize: '0.8rem', color: '#555' }}>
-                    연간 납부액: {calculateInsurance().annual.toLocaleString()}만원
-                  </p>
-                </div>
-              )}
-
-              {/* 금액 입력 필드 */}
-              {option.hasAmount && getCheckboxState(option) && (
-                <div style={{ marginBottom: '15px' }}>
-                  <label style={{ 
-                    fontSize: '0.9rem', 
-                    fontWeight: 'bold', 
-                    color: ' #2c3e50',
-                    marginBottom: '8px',
-                    display: 'block'
-                  }}>
-                    { option.id === 'housing-rent' ? '상환한 원리금 총액' : '이자 상환액'} (만원 단위)
-                  </label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <input
-                      type="number"
-                      min="0"
-                      placeholder="0"
-                      value={getInputValue( option.id) || ''}  // ✅ 사용자 입력값 표시
-                      onChange={(e) => handleInputChange( option.id, e.target.value, 'amount')}
-                      style={{
-                        width: '200px',
-                        padding: '10px',
-                        borderRadius: '8px',
-                        border: '2px solid #e0e6ed',
-                        fontSize: '1rem'
-                      }}
-                    />
-                    <span style={{ color: ' #7f8c8d' }}>만원</span>
-                  </div>
-                </div>
-              )}
-
-              {/* 상세정보 입력 (주택저당차입금만) */}
-              {option.hasDetails && getCheckboxState(option) && (
-                <div style={{ 
-                  background: 'rgba(241, 196, 15, 0.1)',
-                  borderRadius: '8px',
-                  padding: '15px',
-                  marginTop: '15px'
-                }}>
-                  <h4 style={{ fontSize: '1rem', fontWeight: 'bold', marginBottom: '15px', color: ' #f39c12' }}>
-                    📋 대출 상세정보 (공제한도 계산용)
-                  </h4>
-                  
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
-                    {/* 계약일 */}
-                    <div>
-                      <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: ' #2c3e50', marginBottom: '5px', display: 'block' }}>
-                        대출 계약일
-                      </label>
-                      <input
-                        type="date"
-                        value={getDetailsValue('contractDate')}
-                        onChange={(e) => handleDetailsChange('contractDate', e.target.value)}
-                        style={{
-                          width: '100%',
-                          padding: '8px',
-                          borderRadius: '6px',
-                          border: '1px solid #ddd',
-                          fontSize: '0.9rem'
-                        }}
-                      />
-                    </div>
-
-                    {/* 상환기간 */}
-                    <div>
-                      <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: ' #2c3e50', marginBottom: '5px', display: 'block' }}>
-                        상환기간
-                      </label>
-                      <select
-                        value={getDetailsValue('repaymentPeriod')}
-                        onChange={(e) => handleDetailsChange('repaymentPeriod', e.target.value)}
-                        style={{
-                          width: '100%',
-                          padding: '8px',
-                          borderRadius: '6px',
-                          border: '1px solid #ddd',
-                          fontSize: '0.9rem'
-                        }}
-                      >
-                        {getRepaymentPeriodOptions.map(option => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* 금리유형 */}
-                    <div>
-                      <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: ' #2c3e50', marginBottom: '5px', display: 'block' }}>
-                        금리유형
-                      </label>
-                      <select
-                        value={getDetailsValue('interestType')}
-                        onChange={(e) => handleDetailsChange('interestType', e.target.value)}
-                        style={{
-                          width: '100%',
-                          padding: '8px',
-                          borderRadius: '6px',
-                          border: '1px solid #ddd',
-                          fontSize: '0.9rem'
-                        }}
-                      >
-                        <option value="">선택하세요</option>
-                        <option value="fixed">고정금리</option>
-                        <option value="variable">변동금리</option>
-                        <option value="mixed">혼합금리</option>
-                      </select>
-                    </div>
-
-                    {/* 상환방식 */}
-                    <div>
-                      <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: ' #2c3e50', marginBottom: '5px', display: 'block' }}>
-                        상환방식
-                      </label>
-                      <select
-                        value={getDetailsValue('repaymentType')}
-                        onChange={(e) => handleDetailsChange('repaymentType', e.target.value)}
-                        style={{
-                          width: '100%',
-                          padding: '8px',
-                          borderRadius: '6px',
-                          border: '1px solid #ddd',
-                          fontSize: '0.9rem'
-                        }}
-                      >
-                        <option value="">선택하세요</option>
-                        <option value="equal-payment">원리금균등상환</option>
-                        <option value="equal-principal">원금균등상환</option>
-                        <option value="interest-only">거치식상환</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          ))}
+          )}
         </div>
 
-        {/* 계산 결과 표시 */}
-        {calculationResult.totalDeduction > 0 && (
-          <div style={{
-            background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
-            borderRadius: '15px',
-            padding: '20px',
-            color: 'white',
-            marginTop: '20px',
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-            gap: '20px',
-            fontSize: '0.9rem'
-          }}>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ marginBottom: '5px', opacity: 0.9 }}>
-                <strong>사회보험료:</strong>
-              </p>
-              <p style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
-                {(getCalculatedAmount('insurance')).toLocaleString()}만원  {/* ✅ 계산된 공제액 표시 */}
-              </p>
+        {/* 총 공제액 요약 */}
+        <div className="total-summary">
+          <div className="summary-content">
+            <h3>총 특별소득공제</h3>
+            <div className="amount-display">
+              <span className="amount">{calculationResult.totalDeduction.toLocaleString()}</span>
+              <span className="unit">만원</span>
             </div>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ marginBottom: '5px', opacity: 0.9 }}>
-                <strong>주택관련:</strong>
-              </p>
-              <p style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
-                {(getCalculatedAmount('housing-rent') + getCalculatedAmount('housing-loan')).toLocaleString()}만원  {/* ✅ 계산된 공제액 표시 */}
-              </p>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ marginBottom: '5px', opacity: 0.9 }}>
-                <strong>총 특별소득공제:</strong>
-              </p>
-              <p style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
-                {calculationResult.totalDeduction.toLocaleString()}만원
-              </p>
-            </div>
+            
+            {calculationResult.totalDeduction > 0 && (
+              <div className="breakdown">
+                {calculationResult.details.map((detail, index) => (
+                  <p key={index}>
+                    • { detail.name}: {detail.amount.toLocaleString()}만원
+                    {detail.limitApplied && (
+                      <span style={{ color: ' #e74c3c' }}> (조정됨)</span>
+                    )}
+                  </p>
+                ))}
+              </div>
+            )}
           </div>
-        )}
+        </div>
 
         {/* 안내사항 */}
-        <div style={{
-          background: 'rgba(255, 193, 7, 0.1)',
-          border: '2px solid rgba(255, 193, 7, 0.3)',
-          borderRadius: '10px',
-          padding: '15px',
-          marginTop: '20px',
-          textAlign: 'center'
-        }}>
-          <p style={{ 
-            fontSize: '0.85rem', 
-            color: '#856404',
-            lineHeight: '1.5'
-          }}>
-            💡 <strong>특별소득공제 안내:</strong><br />
-            • 사회보험료: 급여에서 자동공제되는 건강보험, 고용보험, 노인장기요양보험 100% 공제<br />
-            • 주택임차차입금: 무주택 세대주 전세자금 대출 원리금 상환시 40% 공제 (최대 40만원)<br />
-            • 주택저당차입금: 대출조건에 따라 공제한도가 달라집니다<br />
-          </p>
+        <div className="info-section">
+          <h4>📌 중요 안내사항</h4>
+          <ul>
+            <li><strong>주택 관련 종합한도:</strong> 2단계 체계로 주택청약종합저축, 주택임차차입금, 장기주택저당차입금에 순차적 한도 적용</li>
+            <li><strong>1단계 한도:</strong> 주택청약종합저축 + 주택임차차입금 ≤ 400만원 (초과시 비례 배분)</li>
+            <li><strong>2단계 한도:</strong> (1단계 결과) + 장기주택저당차입금 ≤ 개별한도 (초과시 장기주택저당차입금 우선 조정)</li>
+            <li><strong>사회보험료:</strong> 급여에서 공제되는 건강보험, 고용보험, 노인장기요양보험료</li>
+            <li><strong>입력 단위:</strong> 모든 금액은 만원 단위로 입력</li>
+          </ul>
         </div>
       </div>
     </div>
   );
-});
-
-// ✅ displayName 설정
-SpecialDeductionInput.displayName = 'SpecialDeductionInput';
+};
 
 export default SpecialDeductionInput;

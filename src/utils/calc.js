@@ -365,65 +365,266 @@ export function getPensionInfo(pensionType) {
   return pensionInfoMap[pensionType] || null;
 }
 
+// ========================================
+// 주택 관련 2단계 종합한도 체계 추가 함수들
+// ========================================
+
+/**
+ * 주택 관련 소득공제 2단계 종합한도 체계 적용
+ * @param {object} specialData - 특별소득공제 데이터
+ * @param {object} otherData - 그밖의 소득공제 데이터
+ * @returns {object} - 한도 적용 후 최종 공제액
+ */
+export function applyHousingDeductionLimits(specialData, otherData) {
+  // 1단계: 주택청약종합저축 + 주택임차차입금 ≤ 400만원
+  const housingSavings = (otherData?.['housing-savings']?.checked && otherData['housing-savings'].amount) || 0;
+  const housingRent = (specialData?.['housing-rent']?.checked && specialData['housing-rent'].amount) || 0;
+  
+  const firstStageTotal = housingSavings + housingRent;
+  const firstStageLimit = 400; // 400만원
+  
+  let adjustedHousingSavings = housingSavings;
+  let adjustedHousingRent = housingRent;
+  
+  // 1단계 한도 초과시 비례 배분
+  if (firstStageTotal > firstStageLimit) {
+    const ratio = firstStageLimit / firstStageTotal;
+    adjustedHousingSavings = Math.round(housingSavings * ratio);
+    adjustedHousingRent = Math.round(housingRent * ratio);
+  }
+  
+  // 2단계: (1단계 결과) + 장기주택저당차입금 ≤ 장기주택저당차입금 개별한도
+  const housingLoanOriginal = (specialData?.['housing-loan']?.checked && specialData['housing-loan'].amount) || 0;
+  const housingLoanLimit = calculateHousingLoanMaxDeduction(specialData?.['housing-loan']?.details || {});
+  
+  const secondStageUsed = adjustedHousingSavings + adjustedHousingRent;
+  const secondStageLimit = housingLoanLimit; // 장기주택저당차입금 개별한도
+  
+  let adjustedHousingLoan = housingLoanOriginal;
+  
+  // 2단계 한도 초과시 장기주택저당차입금 우선 조정
+  if (secondStageUsed + housingLoanOriginal > secondStageLimit) {
+    adjustedHousingLoan = Math.max(0, secondStageLimit - secondStageUsed);
+  }
+  
+  return {
+    // 1단계 결과
+    firstStage: {
+      housingSavings: adjustedHousingSavings,
+      housingRent: adjustedHousingRent,
+      total: adjustedHousingSavings + adjustedHousingRent,
+      limit: firstStageLimit,
+      isExceeded: firstStageTotal > firstStageLimit,
+      originalTotal: firstStageTotal
+    },
+    // 2단계 결과
+    secondStage: {
+      housingLoan: adjustedHousingLoan,
+      limit: secondStageLimit,
+      isExceeded: (secondStageUsed + housingLoanOriginal) > secondStageLimit,
+      originalAmount: housingLoanOriginal
+    },
+    // 최종 조정된 금액들
+    finalAmounts: {
+      housingSavings: adjustedHousingSavings,
+      housingRent: adjustedHousingRent,
+      housingLoan: adjustedHousingLoan
+    }
+  };
+}
+
+/**
+ * 장기주택저당차입금 최대 공제한도 계산
+ * @param {object} details - 대출 상세 정보
+ * @returns {number} - 최대 공제한도 (만원)
+ */
+export function calculateHousingLoanMaxDeduction(details) {
+  const { contractDate, repaymentPeriod, interestType, repaymentType } = details;
+  
+/*   if (!contractDate || !repaymentPeriod || !interestType || !repaymentType) {
+    return 300; // 기본 한도 300만원
+  }
+   */
+  // 계약일 기준 구분 (2012년 1월 1일)
+  const contractYear = new Date(contractDate).getFullYear();
+  const isAfter2012 = contractYear >= 2012;
+  
+  let maxDeduction; // 기본값
+  
+  if (isAfter2012) {
+    // 2012년 이후 계약
+    if (repaymentPeriod === '30' && 
+        (interestType === 'fixed' || repaymentType === 'installment')) {
+      maxDeduction = 1800; // 1800만원
+    } else if ((repaymentPeriod === '15' || repaymentPeriod === '30') && 
+               repaymentType === 'other') {
+      maxDeduction = 800; // 800만원
+    } else if (repaymentPeriod === '10' && 
+              (interestType === 'fixed' || repaymentType === 'installment')) {
+      maxDeduction = 600; // 600만원
+    }
+  } else {
+    // 2012년 이전 계약
+    if (repaymentPeriod === '15' && 
+        interestType === 'fixed' && repaymentType === 'installment') {
+      maxDeduction = 2000; // 2000만원
+    } else if (repaymentPeriod === '15' && 
+               (interestType === 'fixed' || repaymentType === 'installment')) {
+      maxDeduction = 1800; // 1800만원
+    } else if (repaymentPeriod === '30') {
+      maxDeduction = 1500; // 1500만원
+    } else if (repaymentPeriod === '15') {
+      maxDeduction = 1000; // 1000만원
+    } else if (repaymentPeriod === 'less') {
+      maxDeduction = 600; // 600만원
+    }
+  }
+  
+  return maxDeduction;
+}
+
+/**
+ * 사회보험료 자동 계산
+ * @param {number} salary - 총급여 (만원)
+ * @returns {number} - 연간 사회보험료 (만원)
+ */
+export function calculateInsuranceAmount(salary) {
+  if (!salary || salary <= 0) return 0;
+  
+  // 2024년 기준 사회보험료율
+  const insuranceRate = 0.03545; // 3.545% (건강보험 + 고용보험 + 노인장기요양보험)
+  const annualSalary = salary * 10000; // 원 단위로 변환
+  const annualInsurance = annualSalary * insuranceRate;
+  
+  return Math.round(annualInsurance / 10000); // 만원 단위로 반환
+}
+
+/**
+ * 주택임차차입금 공제액 계산
+ * @param {number} inputAmount - 입력 금액 (만원)
+ * @returns {number} - 공제액 (만원)
+ */
+export function calculateHousingRentDeduction(inputAmount) {
+  if (!inputAmount || inputAmount <= 0) return 0;
+  
+  const deductionRate = 0.4; // 40% 공제
+  const maxDeduction = 400; // 최대 400만원 (1단계 한도에서 조정됨)
+  
+  const calculatedAmount = inputAmount * deductionRate;
+  return Math.min(calculatedAmount, maxDeduction);
+}
+
+/**
+ * 장기주택저당차입금 공제액 계산
+ * @param {number} inputAmount - 입력 금액 (만원)
+ * @param {object} details - 대출 상세 정보
+ * @returns {number} - 공제액 (만원)
+ */
+export function calculateHousingLoanDeduction(inputAmount, details) {
+  if (!inputAmount || inputAmount <= 0) return 0;
+  
+  const maxDeduction = calculateHousingLoanMaxDeduction(details);
+  return Math.min(inputAmount, maxDeduction);
+}
+
+/**
+ * 주택청약종합저축 공제액 계산
+ * @param {number} inputAmount - 납입액 (만원)
+ * @param {boolean} isHouseholdHead - 무주택 세대주 여부
+ * @returns {number} - 공제액 (만원)
+ */
+export function calculateHousingSavingsDeduction(inputAmount, isHouseholdHead) {
+  if (!inputAmount || inputAmount <= 0 || !isHouseholdHead) return 0;
+  
+  const deductionRate = 0.4; // 40% 공제
+  const maxDeduction = 300; // 최대 300만원
+  
+  const calculatedAmount = inputAmount * deductionRate;
+  return Math.min(calculatedAmount, maxDeduction);
+}
+
 /**
  * 특별소득공제 계산 함수 (만원 단위)
  * @param {object} specialData - 특별소득공제 데이터
  * @param {number} salary - 총급여 (만원 단위)
  * @returns {object} - { totalDeduction: 총특별소득공제(만원), details: 상세내역 }
  */
-export function calculateSpecialDeduction(specialData, salary = 0) {
+/**
+ * 특별소득공제 계산 (수정된 버전 - 2단계 한도 체계 적용)
+ * 기존 calculateSpecialDeduction 함수를 이 버전으로 교체하세요
+ */
+export function calculateSpecialDeduction(specialData, otherData = {}) {
   let totalDeduction = 0;
   let details = [];
+  let errors = [];
   
-  // 사회보험료 계산
-  if (specialData.insurance?.checked) {
-    const amount = specialData.insurance.amount || 0;
-    
-    // 자동계산 또는 수동입력된 금액 사용 (만원 단위)
-    const finalAmount = amount || calculateInsuranceAmount(salary);
-    
-    totalDeduction += finalAmount;
-    details.push({
-      type: '사회보험료',
-      description: '건강보험, 고용보험, 노인장기요양보험',
-      amount: finalAmount,
-      rate: '3.545%',
-      isAutoCalculated: !amount || amount === calculateInsuranceAmount(salary)
-    });
-  }
+  // 주택 관련 2단계 한도 체계 적용
+  const housingLimits = applyHousingDeductionLimits(specialData, otherData);
   
-  // 주택임차차입금 원리금상환액 계산
-  if (specialData['housing-rent']?.checked) {
-    const amount = specialData['housing-rent'].amount || 0;
+  try {
+    // 1. 사회보험료 계산 (한도 제한 없음)
+    if (specialData?.insurance?.checked) {
+      const insuranceAmount = specialData.insurance.amount || 0;
+      totalDeduction += insuranceAmount;
+      details.push({
+        type: 'insurance',
+        name: '사회보험료',
+        amount: insuranceAmount,
+        rate: '100%',
+        maxLimit: null,
+        description: '건강보험, 고용보험, 노인장기요양보험료'
+      });
+    }
     
-    totalDeduction += amount;
-    details.push({
-      type: '주택임차차입금',
-      description: '전세자금 대출 원리금 상환액',
-      amount: amount,
-      rate: '40% (최대 400만원)',
-      inputAmount: specialData['housing-rent'].inputAmount || 0
-    });
-  }
-  
-  // 장기주택저당차입금 이자상환액 계산
-  if (specialData['housing-loan']?.checked) {
-    const amount = specialData['housing-loan'].amount || 0;
+    // 2. 주택임차차입금 (2단계 한도 적용)
+    if (specialData?.['housing-rent']?.checked) {
+      const originalAmount = specialData['housing-rent'].amount || 0;
+      const adjustedAmount = housingLimits.finalAmounts.housingRent;
+      
+      totalDeduction += adjustedAmount;
+      details.push({
+        type: 'housing-rent',
+        name: '주택임차차입금',
+        amount: adjustedAmount,
+        originalAmount: originalAmount,
+        rate: '40%',
+        maxLimit: '개별 한도 적용',
+        description: '전세자금 대출 원리금 상환액',
+        limitApplied: originalAmount !== adjustedAmount,
+        limitDetails: housingLimits.firstStage
+      });
+    }
     
-    totalDeduction += amount;
-    details.push({
-      type: '장기주택저당차입금',
-      description: '주택구입 대출 이자상환액',
-      amount: amount,
-      rate: '대출조건별 차등',
-      inputAmount: specialData['housing-loan'].inputAmount || 0,
-      loanDetails: specialData['housing-loan'].details || {}
-    });
+    // 3. 장기주택저당차입금 (2단계 한도 적용)
+    if (specialData?.['housing-loan']?.checked) {
+      const originalAmount = specialData['housing-loan'].amount || 0;
+      const adjustedAmount = housingLimits.finalAmounts.housingLoan;
+      
+      totalDeduction += adjustedAmount;
+      details.push({
+        type: 'housing-loan',
+        name: '장기주택저당차입금',
+        amount: adjustedAmount,
+        originalAmount: originalAmount,
+        rate: '대출조건별',
+        maxLimit: housingLimits.secondStage.limit,
+        description: '주택구입 대출 이자상환액',
+        limitApplied: originalAmount !== adjustedAmount,
+        limitDetails: housingLimits.secondStage
+      });
+    }
+    
+  } catch (error) {
+    console.error('특별소득공제 계산 오류:', error);
+    errors.push('계산 중 오류가 발생했습니다.');
   }
   
   return {
-    totalDeduction: Math.round(totalDeduction),
-    details
+    totalDeduction: Math.round(totalDeduction), // 만원 단위
+    details,
+    errors,
+    housingLimitDetails: housingLimits, // 한도 적용 상세 정보
+    isValid: errors.length === 0
   };
 }
 
@@ -432,7 +633,7 @@ export function calculateSpecialDeduction(specialData, salary = 0) {
  * @param {number} salary - 총급여 (만원 단위)
  * @returns {number} - 연간 사회보험료 (만원 단위)
  */
-export function calculateInsuranceAmount(salary) {
+/* export function calculateInsuranceAmount(salary) {
   if (salary <= 0) return 0;
   
   const salaryInWon = salary * 10000; // 원 단위로 변환
@@ -443,21 +644,7 @@ export function calculateInsuranceAmount(salary) {
   const annualInsuranceWon = monthlyInsurance * 12;
   
   return Math.round(annualInsuranceWon / 10000); // 만원 단위로 반환
-}
-
-/**
- * 주택임차차입금 공제액 계산 (만원 단위)
- * @param {number} inputAmount - 원리금 상환액 (만원 단위)
- * @returns {number} - 공제액 (만원 단위)
- */
-export function calculateHousingRentDeduction(inputAmount) {
-  if (inputAmount <= 0) return 0;
-  
-  const amountInWon = inputAmount * 10000; // 만원을 원으로 변환
-  const deduction = Math.min(amountInWon * 0.4, 4000000); // 40% 공제, 최대 40만원
-  
-  return Math.round(deduction / 10000); // 만원으로 다시 변환
-}
+} */
 
 /**
  * 장기주택저당차입금 이자상환액 공제 한도 계산 (만원 단위)
@@ -465,7 +652,7 @@ export function calculateHousingRentDeduction(inputAmount) {
  * @param {object} details - 대출 상세정보
  * @returns {number} - 공제액 (만원 단위)
  */
-export function calculateHousingLoanDeduction(inputAmount, details) {
+/* export function calculateHousingLoanDeduction(inputAmount, details) {
   if (inputAmount <= 0) return 0;
   
   const amountInWon = inputAmount * 10000; // 만원을 원으로 변환
@@ -509,7 +696,7 @@ export function calculateHousingLoanDeduction(inputAmount, details) {
   
   const deduction = Math.min(amountInWon, maxDeduction);
   return Math.round(deduction / 10000); // 만원으로 변환
-}
+} */
 
 /**
  * 특별소득공제 유효성 검사
@@ -673,7 +860,7 @@ export function calculateOtherDeduction(otherData, salary = 0) {
  * @param {boolean} isHouseholdHead - 무주택 세대주 여부
  * @returns {object} - { amount: 공제액, isValid: 유효성, message: 메시지 }
  */
-export function calculateHousingSavingsDeduction(inputAmount, isHouseholdHead = false) {
+/* export function calculateHousingSavingsDeduction(inputAmount, isHouseholdHead = false) {
   // 기본 검증
   if (inputAmount <= 0) {
     return {
@@ -712,7 +899,7 @@ export function calculateHousingSavingsDeduction(inputAmount, isHouseholdHead = 
     isValid: true,
     message: `납입액 ${inputAmount.toLocaleString()}만원 → 공제액 ${Math.round(deduction).toLocaleString()}만원 (40% 공제율 적용)`
   };
-}
+} */
 
 /**
  * 신용카드 등 소득공제 계산 (개선된 버전)
